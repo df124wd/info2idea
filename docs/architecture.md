@@ -3,12 +3,13 @@
 Info2Idea is built around a small, replaceable pipeline:
 
 ```text
-Sources -> Fetch -> Normalize -> Score -> Topic Memory -> Idea Card -> Store -> Dashboard
+Sources -> Fetch -> Normalize -> Rule Score -> Optional AI Analysis -> Topic Memory -> Idea Card -> Store -> Dashboard
 ```
 
 ## Modules
 
 - `feeds.py`: loads sources and parses RSS/Atom into normalized articles.
+- `ai.py`: optionally calls an LLM for deeper analysis of stronger new signals and merges the result into the score.
 - `scoring.py`: scores articles using focus-domain, pain, monetization, actionability, validation, reach, and recency signals.
 - `idea_engine.py`: turns a scored article into a structured business idea card.
 - `storage.py`: persists articles, opportunity topics, idea cards, source runs, and source health in SQLite.
@@ -28,13 +29,25 @@ The first version optimizes for your current constraints:
 That is why the MVP avoids paid infrastructure and heavy frameworks. The architecture still leaves room for upgrades:
 
 - SQLite can become PostgreSQL.
-- Keyword scoring can become hybrid LLM + embeddings.
+- Rule scoring can be enhanced by LLM analysis and later embeddings.
 - RSS sources can be joined by browser automation and official APIs.
 - The static dashboard can become Next.js when the product surface needs accounts, saved views, or collaboration.
 
+## Current Dashboard
+
+The dashboard is meant to be an information workbench, not just a list of links:
+
+- top metrics for signals, ideas, topics, source health, and AI-analyzed rows
+- source health cards with status, duration, latest counts, and errors
+- filters for source status and opportunity status
+- high-signal idea cards
+- topic and recent-signal side panels
+- score dimension bars for recent signals
+- AI summaries and opportunity notes when available
+
 ## Next Iteration
 
-The highest-leverage next step is not adding more feeds. It is adding validation signals:
+After source monitoring and dashboard clarity, the highest-leverage next step is validation signals:
 
 - Are there paid competitors?
 - Are people searching for this?

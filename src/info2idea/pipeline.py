@@ -5,11 +5,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 
+from .ai import maybe_enhance_score
 from .feeds import fetch_source, load_sources
 from .idea_engine import build_idea_card
 from .models import Article, SourceRunSummary
 from .scoring import apply_source_weight, score_article
-from .storage import connect, record_source_run, upsert_article, upsert_idea_card, upsert_opportunity_topic
+from .storage import article_exists, connect, record_source_run, upsert_article, upsert_idea_card, upsert_opportunity_topic
 
 
 @dataclass
@@ -19,6 +20,7 @@ class PipelineResult:
     inserted_ideas: int = 0
     inserted_topics: int = 0
     source_runs: int = 0
+    ai_analyzed: int = 0
     failed_sources: dict[str, str] | None = None
 
 
@@ -90,17 +92,23 @@ def run_pipeline(
             for article in articles:
                 if not article.source_key:
                     article.source_key = source.source_key
+                if article_exists(connection, article):
+                    continue
                 scored = apply_source_weight(score_article(article), source.weight)
+                enhanced = maybe_enhance_score(article, scored)
+                if enhanced.analysis_mode == "ai":
+                    result.ai_analyzed += 1
+                scored = enhanced
                 if upsert_article(connection, article, scored):
                     result.inserted_articles += 1
                     new_articles += 1
-                if upsert_opportunity_topic(connection, article, scored):
-                    result.inserted_topics += 1
-                    new_topics += 1
-                if scored.total >= min_score:
-                    card = build_idea_card(article, scored)
-                    if upsert_idea_card(connection, card):
-                        result.inserted_ideas += 1
+                    if upsert_opportunity_topic(connection, article, scored):
+                        result.inserted_topics += 1
+                        new_topics += 1
+                    if scored.total >= min_score:
+                        card = build_idea_card(article, scored)
+                        if upsert_idea_card(connection, card):
+                            result.inserted_ideas += 1
             record_source_run(
                 connection,
                 SourceRunSummary(

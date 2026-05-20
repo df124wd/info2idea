@@ -21,6 +21,7 @@ def main() -> None:
 
     list_parser = subparsers.add_parser("ideas", help="Print idea cards as JSON.")
     list_parser.add_argument("--limit", type=int, default=20)
+    list_parser.add_argument("--status", default=None, help="Filter by recommendation.")
 
     article_parser = subparsers.add_parser("articles", help="Print scored articles as JSON.")
     article_parser.add_argument("--limit", type=int, default=50)
@@ -57,6 +58,7 @@ def main() -> None:
                 "inserted_ideas": result.inserted_ideas,
                 "inserted_topics": result.inserted_topics,
                 "source_runs": result.source_runs,
+                "ai_analyzed": result.ai_analyzed,
                 "failed_sources": result.failed_sources or {},
             }
         )
@@ -69,7 +71,7 @@ def main() -> None:
     connection = connect(db_path)
     try:
         if args.command == "ideas":
-            _print_json(list_idea_cards(connection, args.limit))
+            _print_json(list_idea_cards(connection, args.limit, args.status))
         elif args.command == "articles":
             _print_json(list_articles(connection, args.limit, args.status))
         elif args.command == "topics":

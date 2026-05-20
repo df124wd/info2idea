@@ -6,21 +6,22 @@ The first version is intentionally low-cost:
 
 - Python standard library only
 - SQLite for local storage
-- RSS/Atom sources configured in JSON
+- RSS/Atom, Google News, HN, GitHub, Reddit, and manual JSON sources configured in JSON
 - Built-in Web dashboard
-- No paid LLM dependency required for the MVP
+- No paid LLM dependency required; AI analysis is an optional enhancement
 
 ## What It Does
 
 The current MVP follows this pipeline:
 
-1. Fetch configured RSS/Atom feeds.
+1. Fetch configured news, community, GitHub, RSS/Atom, and manual signal sources.
 2. Normalize articles and deduplicate them in SQLite.
 3. Score each article against your preferred domains: AI tools, content business, indie development, and games.
-4. Classify each signal into build now, validate in 7 days, watch, or archive.
-5. Store weak signals as reusable topics so they can return later with more evidence.
-6. Generate an idea card when a signal is strong enough.
-7. Show ideas, topics, and recent signals in a local dashboard.
+4. Optionally ask AI to analyze stronger new signals and refine the opportunity judgment.
+5. Classify each signal into build now, validate in 7 days, watch, or archive.
+6. Store weak signals as reusable topics so they can return later with more evidence.
+7. Generate an idea card when a signal is strong enough.
+8. Show source health, ideas, topics, recent signals, filters, and score dimensions in a local dashboard.
 
 Each idea card includes:
 
@@ -122,6 +123,30 @@ python -m info2idea.cli source-runs --limit 100
 
 This is important because the product is meant to watch markets over time. A quiet source, a broken source, and a source producing strong new signals should not look the same.
 
+## Optional AI Analysis
+
+The scoring model works without AI. By default it uses deterministic rules so the project stays free and reliable.
+
+If `OPENAI_API_KEY` is set, the pipeline only sends stronger new signals to AI for deeper analysis. AI can add:
+
+- one-sentence signal summary
+- sharper target user and pain point
+- concrete monetization angle
+- content/distribution angle
+- 7-day validation plan
+- risks
+- refined score dimensions
+
+PowerShell example:
+
+```powershell
+$env:OPENAI_API_KEY = "your-key"
+$env:INFO2IDEA_AI_MODEL = "gpt-4o-mini"
+python -m info2idea.cli run
+```
+
+Without a key, `analysis_mode` stays `rules`. With a successful AI pass, it becomes `ai`.
+
 ## Testing
 
 ```powershell
@@ -181,8 +206,7 @@ Why this setup:
 
 ## Roadmap
 
-- Add LLM provider interface for deeper idea generation.
-- Add source adapters for GitHub trending, Product Hunt API, Reddit, YouTube, Steam, and app stores.
+- Add more source adapters for Product Hunt API, YouTube, Steam, app stores, Bilibili, and Xiaohongshu workflows.
 - Add validation signals: search volume, GitHub stars, competitor pricing, social engagement, and landing-page signups.
 - Add content generation: posts, scripts, newsletters, and outreach messages.
 - Add product execution mode: generate MVP specs, tasks, and starter code.

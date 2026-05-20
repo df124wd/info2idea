@@ -46,6 +46,10 @@
           <strong id="archive-count">0</strong>
         </article>
         <article>
+          <span>AI analyzed</span>
+          <strong id="ai-count">0</strong>
+        </article>
+        <article>
           <span>Latest fetch</span>
           <strong id="latest-fetch">-</strong>
         </article>
@@ -56,6 +60,12 @@
           <h2>Source Health</h2>
           <span>Last collection run by source</span>
         </div>
+        <div class="toolbar" aria-label="Source filters">
+          <button class="filter active" data-source-status="" type="button">All</button>
+          <button class="filter" data-source-status="ok" type="button">OK</button>
+          <button class="filter" data-source-status="empty" type="button">Empty</button>
+          <button class="filter" data-source-status="error" type="button">Error</button>
+        </div>
         <div id="source-list" class="source-list"></div>
       </section>
 
@@ -64,6 +74,13 @@
           <div class="section-title">
             <h2>High-Signal Ideas</h2>
             <span id="run-status"></span>
+          </div>
+          <div class="toolbar" aria-label="Signal filters">
+            <button class="filter active" data-signal-status="" type="button">All</button>
+            <button class="filter" data-signal-status="build_now" type="button">Build</button>
+            <button class="filter" data-signal-status="validate_7_days" type="button">Validate</button>
+            <button class="filter" data-signal-status="watch" type="button">Watch</button>
+            <button class="filter" data-signal-status="archive" type="button">Archive</button>
           </div>
           <div id="idea-list" class="idea-list"></div>
         </div>

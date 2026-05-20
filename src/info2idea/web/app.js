@@ -3,6 +3,8 @@ const state = {
   articles: [],
   topics: [],
   sources: [],
+  signalStatus: "",
+  sourceStatus: "",
 };
 
 const els = {
@@ -19,6 +21,7 @@ const els = {
   healthySourceCount: document.querySelector("#healthy-source-count"),
   watchCount: document.querySelector("#watch-count"),
   archiveCount: document.querySelector("#archive-count"),
+  aiCount: document.querySelector("#ai-count"),
   latestFetch: document.querySelector("#latest-fetch"),
 };
 
@@ -31,12 +34,14 @@ async function api(path, options = {}) {
 }
 
 async function refresh() {
+  const signalQuery = state.signalStatus ? `&status=${encodeURIComponent(state.signalStatus)}` : "";
+  const sourceQuery = state.sourceStatus ? `&status=${encodeURIComponent(state.sourceStatus)}` : "";
   const [stats, ideas, articles, topics, sources] = await Promise.all([
     api("/api/stats"),
-    api("/api/ideas?limit=30"),
-    api("/api/articles?limit=20"),
-    api("/api/topics?limit=20"),
-    api("/api/sources?limit=50"),
+    api(`/api/ideas?limit=30${signalQuery}`),
+    api(`/api/articles?limit=24${signalQuery}`),
+    api(`/api/topics?limit=24${signalQuery}`),
+    api(`/api/sources?limit=50${sourceQuery}`),
   ]);
   state.ideas = ideas;
   state.articles = articles;
@@ -57,6 +62,7 @@ function renderStats(stats) {
   els.healthySourceCount.textContent = stats.healthy_sources ?? 0;
   els.watchCount.textContent = stats.watching ?? 0;
   els.archiveCount.textContent = stats.archived ?? 0;
+  els.aiCount.textContent = stats.ai_analyzed ?? 0;
   els.latestFetch.textContent = formatDate(stats.latest_fetch);
 }
 
@@ -71,10 +77,11 @@ function renderSources() {
       <div>
         <h3>${escapeHtml(source.name)}</h3>
         <div class="meta">
-          <span class="status">${escapeHtml(source.status)}</span>
+          <span class="status ${statusClass(source.status)}">${escapeHtml(source.status)}</span>
           <span>${escapeHtml(source.kind)}</span>
           <span>${escapeHtml(source.category)}</span>
           <span>${Number(source.last_duration_ms || 0)} ms</span>
+          <span>${formatDate(source.last_finished_at)}</span>
         </div>
       </div>
       <div class="source-metrics">
@@ -98,7 +105,7 @@ function renderIdeas() {
       <header>
         <div>
           <span class="domain">${escapeHtml(idea.domain)}</span>
-          <span class="status">${escapeHtml(idea.recommendation || "validate")}</span>
+          <span class="status ${statusClass(idea.recommendation)}">${escapeHtml(idea.recommendation || "validate")}</span>
           <h3>${escapeHtml(idea.title)}</h3>
         </div>
         <div class="score">${Number(idea.score).toFixed(1)}</div>
@@ -129,7 +136,7 @@ function renderTopics() {
     <article class="article">
       <h3><a href="${escapeAttr(topic.last_article_url)}" target="_blank" rel="noreferrer">${escapeHtml(topic.title)}</a></h3>
       <div class="meta">
-        <span class="status">${escapeHtml(topic.status)}</span>
+        <span class="status ${statusClass(topic.status)}">${escapeHtml(topic.status)}</span>
         <span>${escapeHtml(topic.domain)}</span>
         <span>${Number(topic.best_score || 0).toFixed(1)}</span>
         <span>${Number(topic.signal_count || 0)} signals</span>
@@ -152,10 +159,48 @@ function renderArticles() {
         <span>${escapeHtml(article.source)}</span>
         <span>${escapeHtml(article.domain || "Unscored")}</span>
         <span>${Number(article.score || 0).toFixed(1)}</span>
-        <span class="status">${escapeHtml(article.recommendation || "archive")}</span>
+        <span class="status ${statusClass(article.recommendation)}">${escapeHtml(article.recommendation || "archive")}</span>
+        <span>${escapeHtml(article.analysis_mode || "rules")}</span>
       </div>
+      ${article.ai_summary ? `<p>${escapeHtml(article.ai_summary)}</p>` : ""}
+      ${article.ai_opportunity ? `<p><strong>AI:</strong> ${escapeHtml(article.ai_opportunity)}</p>` : ""}
+      ${renderDimensions(article.dimension_scores)}
     </article>
   `).join("");
+}
+
+function renderDimensions(value) {
+  if (!value) return "";
+  let dimensions = {};
+  try {
+    dimensions = typeof value === "string" ? JSON.parse(value) : value;
+  } catch {
+    return "";
+  }
+  const labels = {
+    willingness_to_pay: "Pay",
+    pain_intensity: "Pain",
+    reachability: "Reach",
+    solo_feasibility: "Solo",
+    seven_day_validation: "7d",
+    content_potential: "Content",
+    timing: "Timing",
+  };
+  return `
+    <div class="dimensions">
+      ${Object.entries(labels).map(([key, label]) => {
+        const score = Number(dimensions[key] || 0);
+        const width = Math.max(0, Math.min(100, (score / 5) * 100));
+        return `
+          <div class="dimension">
+            <span>${label}</span>
+            <div><i style="width:${width}%"></i></div>
+            <b>${score.toFixed(1)}</b>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 function field(title, value) {
@@ -201,13 +246,40 @@ function escapeAttr(value) {
   return escapeHtml(value).replaceAll("`", "&#096;");
 }
 
+function statusClass(value) {
+  const normalized = String(value || "").replaceAll("_", "-");
+  return `status-${normalized || "unknown"}`;
+}
+
+document.querySelectorAll("[data-signal-status]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    state.signalStatus = button.dataset.signalStatus || "";
+    setActive("[data-signal-status]", button);
+    await refresh();
+  });
+});
+
+document.querySelectorAll("[data-source-status]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    state.sourceStatus = button.dataset.sourceStatus || "";
+    setActive("[data-source-status]", button);
+    await refresh();
+  });
+});
+
+function setActive(selector, activeButton) {
+  document.querySelectorAll(selector).forEach((button) => {
+    button.classList.toggle("active", button === activeButton);
+  });
+}
+
 els.runButton.addEventListener("click", async () => {
   els.runButton.disabled = true;
   els.runStatus.textContent = "Collecting...";
   try {
     const result = await api("/api/run", { method: "POST" });
     const failed = Object.keys(result.failed_sources || {}).length;
-    els.runStatus.textContent = `Added ${result.inserted_articles} signals, ${result.inserted_ideas} ideas, ${result.inserted_topics} topics across ${result.source_runs} sources${failed ? `, ${failed} failed` : ""}`;
+    els.runStatus.textContent = `Added ${result.inserted_articles} signals, ${result.inserted_ideas} ideas, ${result.inserted_topics} topics across ${result.source_runs} sources; AI ${result.ai_analyzed || 0}${failed ? `, ${failed} failed` : ""}`;
     await refresh();
   } catch (error) {
     els.runStatus.textContent = error.message;

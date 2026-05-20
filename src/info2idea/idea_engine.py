@@ -40,36 +40,39 @@ DEFAULT_PLAYBOOK = {
 
 def build_idea_card(article: Article, score: OpportunityScore) -> IdeaCard:
     playbook = DOMAIN_PLAYBOOKS.get(score.domain, DEFAULT_PLAYBOOK)
+    insight = score.ai_insight
     subject = _subject(article.title)
-    pain_point = _pain_point(article, score.domain)
-    product_idea = f"Build {playbook['product']} for the '{subject}' opportunity."
+    pain_point = insight.pain_point if insight and insight.pain_point else _pain_point(article, score.domain)
+    product_idea = insight.opportunity if insight and insight.opportunity else f"Build {playbook['product']} for the '{subject}' opportunity."
+    validation_plan = insight.validation_plan if insight and insight.validation_plan else [
+        "Check search and community demand with HN, Reddit, Product Hunt, GitHub, YouTube, and keyword suggestions.",
+        "Find 3 paid alternatives or adjacent products; if none exist, validate willingness to pay before coding more.",
+        "Track replies, clicks, email signups, and paid intent in a simple spreadsheet.",
+    ]
+    risks = insight.risks if insight and insight.risks else [
+        "The article may describe hype rather than a painful repeated problem.",
+        "The buyer might be too broad; narrow the first version to one niche and one workflow.",
+        "Distribution can be harder than building; reserve time for posts, DMs, and demos.",
+    ]
 
     return IdeaCard(
         article_url=article.url,
         title=article.title,
         domain=score.domain,
         score=score.total,
-        target_user=playbook["target_user"],
+        target_user=insight.target_user if insight and insight.target_user else playbook["target_user"],
         pain_point=pain_point,
         product_idea=product_idea,
-        monetization=playbook["monetization"],
+        monetization=insight.monetization if insight and insight.monetization else playbook["monetization"],
         mvp_steps=[
             "Collect 10 concrete examples from the same niche and summarize the repeated workflow.",
             "Create a landing page or README with the promise, target user, screenshots/mockups, and pricing hypothesis.",
             "Ship the smallest artifact in 3-5 days: script, template, dashboard, extension, or concierge service.",
             "DM or post to 20 relevant users and ask for a paid pilot, preorder, or call.",
         ],
-        content_angle=playbook["content"],
-        validation_plan=[
-            "Check search and community demand with HN, Reddit, Product Hunt, GitHub, YouTube, and keyword suggestions.",
-            "Find 3 paid alternatives or adjacent products; if none exist, validate willingness to pay before coding more.",
-            "Track replies, clicks, email signups, and paid intent in a simple spreadsheet.",
-        ],
-        risks=[
-            "The article may describe hype rather than a painful repeated problem.",
-            "The buyer might be too broad; narrow the first version to one niche and one workflow.",
-            "Distribution can be harder than building; reserve time for posts, DMs, and demos.",
-        ],
+        content_angle=insight.content_angle if insight and insight.content_angle else playbook["content"],
+        validation_plan=validation_plan,
+        risks=risks,
         recommendation=score.recommendation,
         next_action=score.next_action,
         topic_key=score.topic_key,

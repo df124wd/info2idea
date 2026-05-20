@@ -57,7 +57,9 @@ h2 {
 .idea-card p,
 .idea-card li,
 .metrics span,
-.status {
+.status,
+.dimension span,
+.dimension b {
   color: var(--muted);
 }
 
@@ -81,6 +83,32 @@ button:disabled {
   cursor: wait;
 }
 
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.filter {
+  min-width: 0;
+  width: auto;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.filter:hover,
+.filter.active {
+  border-color: var(--accent);
+  background: #e8f3ef;
+  color: var(--accent-strong);
+}
+
 main {
   width: min(1280px, 100%);
   margin: 0 auto;
@@ -89,7 +117,7 @@ main {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 24px;
 }
@@ -299,6 +327,13 @@ aside {
   letter-spacing: 0;
 }
 
+.article p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .meta {
   display: flex;
   flex-wrap: wrap;
@@ -313,6 +348,63 @@ aside {
   background: #f3f4f0;
   font-size: 12px;
   font-weight: 700;
+}
+
+.status-ok,
+.status-build-now {
+  background: #e4f4e9;
+  color: #166432;
+}
+
+.status-validate-7-days,
+.status-watch {
+  background: #fff4dc;
+  color: #8a520d;
+}
+
+.status-error,
+.status-archive {
+  background: #fdecea;
+  color: #9d2d21;
+}
+
+.status-empty {
+  background: #eef1f4;
+  color: #56616a;
+}
+
+.dimensions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 10px;
+  margin-top: 10px;
+}
+
+.dimension {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 30px;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+}
+
+.dimension div {
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: #edf1ef;
+}
+
+.dimension i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.dimension b {
+  font-weight: 700;
+  text-align: right;
 }
 
 .empty {
@@ -333,7 +425,8 @@ aside {
   .layout,
   .idea-grid,
   .source-list,
-  .source-row {
+  .source-row,
+  .dimensions {
     grid-template-columns: 1fr;
   }
 

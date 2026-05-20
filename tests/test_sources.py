@@ -5,7 +5,8 @@ from tempfile import TemporaryDirectory
 
 from info2idea.feeds import fetch_source
 from info2idea.models import FeedSource, SourceRunSummary
-from info2idea.storage import connect, list_source_runs, list_source_status, record_source_run
+from info2idea.scoring import score_article
+from info2idea.storage import connect, list_articles, list_source_runs, list_source_status, record_source_run, upsert_article
 
 
 class SourceTests(unittest.TestCase):
@@ -59,3 +60,46 @@ class SourceTests(unittest.TestCase):
                 self.assertEqual(runs[0]["duration_ms"], 42)
             finally:
                 connection.close()
+
+    def test_article_persists_analysis_fields(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            connection = connect(Path(temp_dir) / "analysis.db")
+            try:
+                article = fetch_source(
+                    FeedSource(
+                        name="Manual",
+                        kind="manual_json",
+                        url=str(_write_signal_file(Path(temp_dir))),
+                        category="ai_tools",
+                    )
+                )[0]
+                score = score_article(article)
+                score.ai_error = "temporary AI failure"
+
+                inserted = upsert_article(connection, article, score)
+                connection.commit()
+
+                rows = list_articles(connection)
+                self.assertTrue(inserted)
+                self.assertEqual(rows[0]["analysis_mode"], "rules")
+                self.assertEqual(rows[0]["ai_error"], "temporary AI failure")
+            finally:
+                connection.close()
+
+
+def _write_signal_file(directory: Path) -> Path:
+    path = directory / "one-signal.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "manual-2",
+                    "title": "Small teams want AI automation dashboards",
+                    "url": "manual://ai-dashboard",
+                    "summary": "Teams pay for simple tools when manual reporting is slow.",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return path

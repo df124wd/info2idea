@@ -24,6 +24,17 @@ CREATE TABLE IF NOT EXISTS articles (
     reasons TEXT,
     matched_keywords TEXT,
     source_key TEXT DEFAULT '',
+    analysis_mode TEXT DEFAULT 'rules',
+    ai_summary TEXT DEFAULT '',
+    ai_opportunity TEXT DEFAULT '',
+    ai_target_user TEXT DEFAULT '',
+    ai_pain_point TEXT DEFAULT '',
+    ai_monetization TEXT DEFAULT '',
+    ai_content_angle TEXT DEFAULT '',
+    ai_validation_plan TEXT DEFAULT '',
+    ai_risks TEXT DEFAULT '',
+    ai_model TEXT DEFAULT '',
+    ai_error TEXT DEFAULT '',
     dimension_scores TEXT,
     risk_penalty REAL DEFAULT 0,
     recommendation TEXT DEFAULT 'archive',
@@ -132,9 +143,11 @@ def upsert_article(connection: sqlite3.Connection, article: Article, score: Oppo
         INSERT INTO articles (
             fingerprint, source, source_category, title, url, summary,
             published_at, fetched_at, score, domain, confidence, reasons, matched_keywords,
-            source_key, dimension_scores, risk_penalty, recommendation, next_action, topic_key
+            source_key, analysis_mode, ai_summary, ai_opportunity, ai_target_user, ai_pain_point,
+            ai_monetization, ai_content_angle, ai_validation_plan, ai_risks, ai_model, ai_error,
+            dimension_scores, risk_penalty, recommendation, next_action, topic_key
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             article.fingerprint,
@@ -151,6 +164,17 @@ def upsert_article(connection: sqlite3.Connection, article: Article, score: Oppo
             "\n".join(score.reasons) if score else "",
             ", ".join(score.matched_keywords) if score else "",
             article.source_key,
+            score.analysis_mode if score else "rules",
+            score.ai_insight.summary if score and score.ai_insight else "",
+            score.ai_insight.opportunity if score and score.ai_insight else "",
+            score.ai_insight.target_user if score and score.ai_insight else "",
+            score.ai_insight.pain_point if score and score.ai_insight else "",
+            score.ai_insight.monetization if score and score.ai_insight else "",
+            score.ai_insight.content_angle if score and score.ai_insight else "",
+            "\n".join(score.ai_insight.validation_plan) if score and score.ai_insight else "",
+            "\n".join(score.ai_insight.risks) if score and score.ai_insight else "",
+            score.ai_insight.model if score and score.ai_insight else "",
+            score.ai_error if score else "",
             _json_dumps(score.dimension_scores) if score else "{}",
             score.risk_penalty if score else 0.0,
             score.recommendation if score else "archive",
@@ -159,6 +183,14 @@ def upsert_article(connection: sqlite3.Connection, article: Article, score: Oppo
         ),
     )
     return True
+
+
+def article_exists(connection: sqlite3.Connection, article: Article) -> bool:
+    existing = connection.execute(
+        "SELECT id FROM articles WHERE fingerprint = ? OR url = ?",
+        (article.fingerprint, article.url),
+    ).fetchone()
+    return bool(existing)
 
 
 def upsert_idea_card(connection: sqlite3.Connection, card: IdeaCard) -> bool:
@@ -381,15 +413,22 @@ def record_source_run(connection: sqlite3.Connection, summary: SourceRunSummary)
     )
 
 
-def list_idea_cards(connection: sqlite3.Connection, limit: int = 50) -> list[dict]:
+def list_idea_cards(connection: sqlite3.Connection, limit: int = 50, status: str | None = None) -> list[dict]:
+    where = ""
+    params: list[object] = []
+    if status:
+        where = "WHERE recommendation = ?"
+        params.append(status)
+    params.append(limit)
     rows = connection.execute(
-        """
+        f"""
         SELECT *
         FROM idea_cards
+        {where}
         ORDER BY score DESC, created_at DESC
         LIMIT ?
         """,
-        (limit,),
+        params,
     ).fetchall()
     return [_row_to_dict(row) for row in rows]
 
@@ -499,6 +538,7 @@ def stats(connection: sqlite3.Connection) -> dict[str, int | str]:
     archive_count = connection.execute("SELECT COUNT(*) AS count FROM opportunity_topics WHERE status = 'archive'").fetchone()["count"]
     source_count = connection.execute("SELECT COUNT(*) AS count FROM source_status").fetchone()["count"]
     healthy_source_count = connection.execute("SELECT COUNT(*) AS count FROM source_status WHERE status = 'ok'").fetchone()["count"]
+    ai_article_count = connection.execute("SELECT COUNT(*) AS count FROM articles WHERE analysis_mode = 'ai'").fetchone()["count"]
     latest = connection.execute("SELECT MAX(fetched_at) AS latest FROM articles").fetchone()["latest"]
     return {
         "articles": article_count,
@@ -508,6 +548,7 @@ def stats(connection: sqlite3.Connection) -> dict[str, int | str]:
         "archived": archive_count,
         "sources": source_count,
         "healthy_sources": healthy_source_count,
+        "ai_analyzed": ai_article_count,
         "latest_fetch": latest or "",
     }
 
@@ -537,6 +578,17 @@ def _migrate(connection: sqlite3.Connection) -> None:
             "next_action": "TEXT DEFAULT ''",
             "topic_key": "TEXT DEFAULT ''",
             "source_key": "TEXT DEFAULT ''",
+            "analysis_mode": "TEXT DEFAULT 'rules'",
+            "ai_summary": "TEXT DEFAULT ''",
+            "ai_opportunity": "TEXT DEFAULT ''",
+            "ai_target_user": "TEXT DEFAULT ''",
+            "ai_pain_point": "TEXT DEFAULT ''",
+            "ai_monetization": "TEXT DEFAULT ''",
+            "ai_content_angle": "TEXT DEFAULT ''",
+            "ai_validation_plan": "TEXT DEFAULT ''",
+            "ai_risks": "TEXT DEFAULT ''",
+            "ai_model": "TEXT DEFAULT ''",
+            "ai_error": "TEXT DEFAULT ''",
         },
     )
     idea_columns = _columns(connection, "idea_cards")

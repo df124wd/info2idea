@@ -36,3 +36,24 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual(sources[0]["last_fetched_count"], 3)
             finally:
                 connection.close()
+
+    def test_second_run_does_not_duplicate_topics(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "info2idea.db"
+
+            first = run_pipeline("config/sample_sources.json", db_path, min_score=10)
+            second = run_pipeline("config/sample_sources.json", db_path, min_score=10)
+
+            self.assertEqual(first.inserted_articles, 3)
+            self.assertEqual(second.inserted_articles, 0)
+            self.assertEqual(second.inserted_topics, 0)
+
+            connection = connect(db_path)
+            try:
+                topics = list_opportunity_topics(connection)
+                self.assertEqual(sum(topic["signal_count"] for topic in topics), 3)
+            finally:
+                connection.close()

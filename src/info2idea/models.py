@@ -67,6 +67,24 @@ class Article:
 
 
 @dataclass
+class AIInsight:
+    summary: str = ""
+    opportunity: str = ""
+    target_user: str = ""
+    pain_point: str = ""
+    monetization: str = ""
+    content_angle: str = ""
+    validation_plan: list[str] = field(default_factory=list)
+    risks: list[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
+    dimension_scores: dict[str, float] = field(default_factory=dict)
+    score_delta: float = 0.0
+    confidence_delta: float = 0.0
+    model: str = ""
+    raw_response: str = ""
+
+
+@dataclass
 class OpportunityScore:
     total: float
     domain: str
@@ -79,6 +97,9 @@ class OpportunityScore:
     next_action: str = "Archive and revisit if this topic appears again."
     topic_key: str = ""
     source_weight: float = 1.0
+    analysis_mode: str = "rules"
+    ai_insight: AIInsight | None = None
+    ai_error: str = ""
 
 
 @dataclass

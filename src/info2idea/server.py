@@ -25,7 +25,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/ideas":
             limit = _limit(parsed.query, default=50)
-            self._json_response(_with_connection(self.db_path, lambda connection: list_idea_cards(connection, limit)))
+            status = _status(parsed.query)
+            self._json_response(_with_connection(self.db_path, lambda connection: list_idea_cards(connection, limit, status)))
             return
         if parsed.path == "/api/articles":
             limit = _limit(parsed.query, default=100)
@@ -63,6 +64,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "inserted_ideas": result.inserted_ideas,
                     "inserted_topics": result.inserted_topics,
                     "source_runs": result.source_runs,
+                    "ai_analyzed": result.ai_analyzed,
                     "failed_sources": result.failed_sources or {},
                 }
             )
