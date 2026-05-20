@@ -11,7 +11,7 @@ Sources -> Fetch -> Normalize -> Score -> Topic Memory -> Idea Card -> Store -> 
 - `feeds.py`: loads sources and parses RSS/Atom into normalized articles.
 - `scoring.py`: scores articles using focus-domain, pain, monetization, actionability, validation, reach, and recency signals.
 - `idea_engine.py`: turns a scored article into a structured business idea card.
-- `storage.py`: persists articles, opportunity topics, and idea cards in SQLite.
+- `storage.py`: persists articles, opportunity topics, idea cards, source runs, and source health in SQLite.
 - `pipeline.py`: orchestrates one full collection and analysis run.
 - `server.py`: serves the dashboard and JSON APIs.
 - `web/`: static dashboard assets.
@@ -48,3 +48,17 @@ The topic memory layer matters just as much:
 - Weak signals are archived, not discarded.
 - Repeated weak signals become topics.
 - Topics can move from archive to watch to validate to build now as evidence accumulates.
+
+## Source Strategy
+
+The system separates low-risk automatic sources from higher-friction sources:
+
+- RSS/Atom: stable news, product, and blog monitoring.
+- Google News RSS: keyword-based market and startup trend monitoring.
+- Hacker News search: technical and indie-dev trend monitoring.
+- GitHub repository search: open-source product and tooling momentum.
+- GitHub issue search: workflow pain, missing features, and developer complaints.
+- Reddit RSS/search: community pain, demand language, and early distribution surfaces.
+- Manual JSON: Bilibili, Xiaohongshu, Steam, newsletters, or any platform where a manual first pass is safer than brittle scraping.
+
+Each source run is stored, so the dashboard can show whether a source is healthy, empty, noisy, or broken.

@@ -89,13 +89,14 @@ main {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 24px;
 }
 
 .metrics article,
 .idea-card,
+.source-panel,
 aside {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -123,6 +124,53 @@ aside {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 20px;
   align-items: start;
+}
+
+.source-panel {
+  padding: 16px;
+  margin-bottom: 22px;
+}
+
+.source-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.source-row:first-child,
+.source-row:nth-child(2) {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.source-row h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.source-row p {
+  grid-column: 1 / -1;
+  color: var(--amber);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.source-metrics {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .section-title {
@@ -283,8 +331,14 @@ aside {
 
   .metrics,
   .layout,
-  .idea-grid {
+  .idea-grid,
+  .source-list,
+  .source-row {
     grid-template-columns: 1fr;
+  }
+
+  .source-metrics {
+    justify-items: start;
   }
 }
 

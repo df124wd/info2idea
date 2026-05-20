@@ -2,6 +2,7 @@ const state = {
   ideas: [],
   articles: [],
   topics: [],
+  sources: [],
 };
 
 const els = {
@@ -10,9 +11,12 @@ const els = {
   ideaList: document.querySelector("#idea-list"),
   articleList: document.querySelector("#article-list"),
   topicList: document.querySelector("#topic-list"),
+  sourceList: document.querySelector("#source-list"),
   articleCount: document.querySelector("#article-count"),
   ideaCount: document.querySelector("#idea-count"),
   topicCount: document.querySelector("#topic-count"),
+  sourceCount: document.querySelector("#source-count"),
+  healthySourceCount: document.querySelector("#healthy-source-count"),
   watchCount: document.querySelector("#watch-count"),
   archiveCount: document.querySelector("#archive-count"),
   latestFetch: document.querySelector("#latest-fetch"),
@@ -27,16 +31,19 @@ async function api(path, options = {}) {
 }
 
 async function refresh() {
-  const [stats, ideas, articles, topics] = await Promise.all([
+  const [stats, ideas, articles, topics, sources] = await Promise.all([
     api("/api/stats"),
     api("/api/ideas?limit=30"),
     api("/api/articles?limit=20"),
     api("/api/topics?limit=20"),
+    api("/api/sources?limit=50"),
   ]);
   state.ideas = ideas;
   state.articles = articles;
   state.topics = topics;
+  state.sources = sources;
   renderStats(stats);
+  renderSources();
   renderIdeas();
   renderTopics();
   renderArticles();
@@ -46,9 +53,38 @@ function renderStats(stats) {
   els.articleCount.textContent = stats.articles ?? 0;
   els.ideaCount.textContent = stats.ideas ?? 0;
   els.topicCount.textContent = stats.topics ?? 0;
+  els.sourceCount.textContent = stats.sources ?? 0;
+  els.healthySourceCount.textContent = stats.healthy_sources ?? 0;
   els.watchCount.textContent = stats.watching ?? 0;
   els.archiveCount.textContent = stats.archived ?? 0;
   els.latestFetch.textContent = formatDate(stats.latest_fetch);
+}
+
+function renderSources() {
+  if (!state.sources.length) {
+    els.sourceList.innerHTML = `<div class="empty">No source runs yet.</div>`;
+    return;
+  }
+
+  els.sourceList.innerHTML = state.sources.map((source) => `
+    <article class="source-row">
+      <div>
+        <h3>${escapeHtml(source.name)}</h3>
+        <div class="meta">
+          <span class="status">${escapeHtml(source.status)}</span>
+          <span>${escapeHtml(source.kind)}</span>
+          <span>${escapeHtml(source.category)}</span>
+          <span>${Number(source.last_duration_ms || 0)} ms</span>
+        </div>
+      </div>
+      <div class="source-metrics">
+        <span>${Number(source.last_fetched_count || 0)} fetched</span>
+        <span>${Number(source.last_new_count || 0)} new</span>
+        <span>${Number(source.total_runs || 0)} runs</span>
+      </div>
+      ${source.last_error ? `<p>${escapeHtml(source.last_error)}</p>` : ""}
+    </article>
+  `).join("");
 }
 
 function renderIdeas() {
@@ -171,7 +207,7 @@ els.runButton.addEventListener("click", async () => {
   try {
     const result = await api("/api/run", { method: "POST" });
     const failed = Object.keys(result.failed_sources || {}).length;
-    els.runStatus.textContent = `Added ${result.inserted_articles} signals, ${result.inserted_ideas} ideas, ${result.inserted_topics} topics${failed ? `, ${failed} failed sources` : ""}`;
+    els.runStatus.textContent = `Added ${result.inserted_articles} signals, ${result.inserted_ideas} ideas, ${result.inserted_topics} topics across ${result.source_runs} sources${failed ? `, ${failed} failed` : ""}`;
     await refresh();
   } catch (error) {
     els.runStatus.textContent = error.message;

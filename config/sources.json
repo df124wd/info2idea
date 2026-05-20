@@ -7,6 +7,44 @@
     "weight": 1.0
   },
   {
+    "name": "HN AI Agents Search",
+    "kind": "hn_search",
+    "query": "AI agents automation SaaS",
+    "category": "ai_tools",
+    "limit": 20,
+    "weight": 1.05,
+    "params": {
+      "tags": "story",
+      "numericFilters": "points>20"
+    }
+  },
+  {
+    "name": "Google News AI Tools",
+    "kind": "google_news",
+    "query": "\"AI tool\" OR \"AI agent\" startup automation",
+    "category": "ai_tools",
+    "limit": 20,
+    "weight": 1.0,
+    "params": {
+      "hl": "en-US",
+      "gl": "US",
+      "ceid": "US:en"
+    }
+  },
+  {
+    "name": "Google News Creator Economy",
+    "kind": "google_news",
+    "query": "\"creator economy\" tools course newsletter automation",
+    "category": "content",
+    "limit": 20,
+    "weight": 0.95,
+    "params": {
+      "hl": "en-US",
+      "gl": "US",
+      "ceid": "US:en"
+    }
+  },
+  {
     "name": "Product Hunt",
     "kind": "rss",
     "url": "https://www.producthunt.com/feed",
@@ -59,12 +97,62 @@
     }
   },
   {
+    "name": "GitHub AI Pain Issues",
+    "kind": "github_issues",
+    "query": "(ai OR llm OR agent) (bug OR feature OR request OR workflow) comments:>5 updated:>2026-01-01",
+    "category": "ai_tools",
+    "limit": 20,
+    "weight": 1.05,
+    "params": {
+      "sort": "updated",
+      "order": "desc"
+    }
+  },
+  {
+    "name": "GitHub Game Dev Pain Issues",
+    "kind": "github_issues",
+    "query": "(unity OR unreal OR godot) (plugin OR editor OR asset OR workflow) comments:>3 updated:>2026-01-01",
+    "category": "games",
+    "limit": 20,
+    "weight": 1.0,
+    "params": {
+      "sort": "updated",
+      "order": "desc"
+    }
+  },
+  {
     "name": "Reddit SideProject",
     "kind": "reddit_rss",
     "url": "https://www.reddit.com/r/SideProject/.rss",
     "category": "indie_dev",
     "limit": 20,
     "weight": 1.0
+  },
+  {
+    "name": "Reddit SaaS Pain Search",
+    "kind": "reddit_search",
+    "query": "automation tool pain pricing customer support",
+    "category": "indie_dev",
+    "limit": 20,
+    "weight": 1.0,
+    "params": {
+      "subreddit": "SaaS",
+      "sort": "new",
+      "time": "week"
+    }
+  },
+  {
+    "name": "Reddit LocalLLaMA Tools",
+    "kind": "reddit_search",
+    "query": "tool workflow agent automation",
+    "category": "ai_tools",
+    "limit": 20,
+    "weight": 1.05,
+    "params": {
+      "subreddit": "LocalLLaMA",
+      "sort": "new",
+      "time": "week"
+    }
   },
   {
     "name": "Reddit Gamedev",

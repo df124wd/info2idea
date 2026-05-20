@@ -1,7 +1,7 @@
 import unittest
 
 from info2idea.pipeline import run_pipeline
-from info2idea.storage import connect, list_idea_cards, list_opportunity_topics, stats
+from info2idea.storage import connect, list_idea_cards, list_opportunity_topics, list_source_status, stats
 
 
 class PipelineTests(unittest.TestCase):
@@ -23,11 +23,16 @@ class PipelineTests(unittest.TestCase):
             try:
                 self.assertEqual(stats(connection)["articles"], 3)
                 self.assertEqual(stats(connection)["topics"], 3)
+                self.assertEqual(stats(connection)["sources"], 1)
+                self.assertEqual(stats(connection)["healthy_sources"], 1)
                 ideas = list_idea_cards(connection)
                 self.assertTrue(ideas)
                 self.assertIn("product_idea", ideas[0])
                 topics = list_opportunity_topics(connection)
                 self.assertTrue(topics)
                 self.assertIn("status", topics[0])
+                sources = list_source_status(connection)
+                self.assertEqual(sources[0]["status"], "ok")
+                self.assertEqual(sources[0]["last_fetched_count"], 3)
             finally:
                 connection.close()

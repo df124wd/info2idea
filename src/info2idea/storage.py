@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .models import Article, IdeaCard, OpportunityScore
+from .models import Article, IdeaCard, OpportunityScore, SourceRunSummary
 
 
 SCHEMA = """
@@ -24,6 +23,7 @@ CREATE TABLE IF NOT EXISTS articles (
     confidence REAL,
     reasons TEXT,
     matched_keywords TEXT,
+    source_key TEXT DEFAULT '',
     dimension_scores TEXT,
     risk_penalty REAL DEFAULT 0,
     recommendation TEXT DEFAULT 'archive',
@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS articles (
 CREATE TABLE IF NOT EXISTS idea_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     article_url TEXT NOT NULL UNIQUE,
+    source_key TEXT DEFAULT '',
     title TEXT NOT NULL,
     domain TEXT NOT NULL,
     score REAL NOT NULL,
@@ -66,6 +67,45 @@ CREATE TABLE IF NOT EXISTS opportunity_topics (
     next_action TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS source_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    category TEXT NOT NULL,
+    status TEXT NOT NULL,
+    fetched_count INTEGER NOT NULL DEFAULT 0,
+    new_count INTEGER NOT NULL DEFAULT 0,
+    topic_count INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    preview TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
+    started_at TEXT NOT NULL,
+    finished_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS source_status (
+    source_key TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    category TEXT NOT NULL,
+    status TEXT NOT NULL,
+    total_runs INTEGER NOT NULL DEFAULT 0,
+    total_fetched INTEGER NOT NULL DEFAULT 0,
+    total_new INTEGER NOT NULL DEFAULT 0,
+    total_topics INTEGER NOT NULL DEFAULT 0,
+    last_fetched_count INTEGER NOT NULL DEFAULT 0,
+    last_new_count INTEGER NOT NULL DEFAULT 0,
+    last_topic_count INTEGER NOT NULL DEFAULT 0,
+    last_duration_ms INTEGER NOT NULL DEFAULT 0,
+    last_preview TEXT NOT NULL DEFAULT '',
+    last_error TEXT NOT NULL DEFAULT '',
+    first_seen TEXT NOT NULL,
+    last_started_at TEXT NOT NULL,
+    last_finished_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -92,9 +132,9 @@ def upsert_article(connection: sqlite3.Connection, article: Article, score: Oppo
         INSERT INTO articles (
             fingerprint, source, source_category, title, url, summary,
             published_at, fetched_at, score, domain, confidence, reasons, matched_keywords,
-            dimension_scores, risk_penalty, recommendation, next_action, topic_key
+            source_key, dimension_scores, risk_penalty, recommendation, next_action, topic_key
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             article.fingerprint,
@@ -110,6 +150,7 @@ def upsert_article(connection: sqlite3.Connection, article: Article, score: Oppo
             score.confidence if score else None,
             "\n".join(score.reasons) if score else "",
             ", ".join(score.matched_keywords) if score else "",
+            article.source_key,
             _json_dumps(score.dimension_scores) if score else "{}",
             score.risk_penalty if score else 0.0,
             score.recommendation if score else "archive",
@@ -130,14 +171,15 @@ def upsert_idea_card(connection: sqlite3.Connection, card: IdeaCard) -> bool:
     connection.execute(
         """
         INSERT INTO idea_cards (
-            article_url, title, domain, score, target_user, pain_point, product_idea,
+            article_url, source_key, title, domain, score, target_user, pain_point, product_idea,
             monetization, mvp_steps, content_angle, validation_plan, risks,
             recommendation, next_action, topic_key, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             card.article_url,
+            card.source_key,
             card.title,
             card.domain,
             card.score,
@@ -229,6 +271,116 @@ def upsert_opportunity_topic(connection: sqlite3.Connection, article: Article, s
     return False
 
 
+def record_source_run(connection: sqlite3.Connection, summary: SourceRunSummary) -> None:
+    now = _to_iso(datetime.now(timezone.utc)) or ""
+    started_at = _to_iso(summary.started_at) or now
+    finished_at = _to_iso(summary.finished_at) or now
+    connection.execute(
+        """
+        INSERT INTO source_runs (
+            source_key, name, kind, category, status, fetched_count, new_count, topic_count,
+            duration_ms, preview, error, started_at, finished_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            summary.source_key,
+            summary.name,
+            summary.kind,
+            summary.category,
+            summary.status,
+            summary.fetched_count,
+            summary.new_count,
+            summary.topic_count,
+            summary.duration_ms,
+            summary.preview,
+            summary.error,
+            started_at,
+            finished_at,
+        ),
+    )
+    existing = connection.execute(
+        "SELECT source_key FROM source_status WHERE source_key = ?",
+        (summary.source_key,),
+    ).fetchone()
+    if not existing:
+        connection.execute(
+            """
+            INSERT INTO source_status (
+                source_key, name, kind, category, status, total_runs, total_fetched, total_new,
+                total_topics, last_fetched_count, last_new_count, last_topic_count, last_duration_ms,
+                last_preview, last_error, first_seen, last_started_at, last_finished_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                summary.source_key,
+                summary.name,
+                summary.kind,
+                summary.category,
+                summary.status,
+                1,
+                summary.fetched_count,
+                summary.new_count,
+                summary.topic_count,
+                summary.fetched_count,
+                summary.new_count,
+                summary.topic_count,
+                summary.duration_ms,
+                summary.preview,
+                summary.error,
+                started_at,
+                started_at,
+                finished_at,
+                now,
+            ),
+        )
+        return
+
+    connection.execute(
+        """
+        UPDATE source_status
+        SET name = ?,
+            kind = ?,
+            category = ?,
+            status = ?,
+            total_runs = total_runs + 1,
+            total_fetched = total_fetched + ?,
+            total_new = total_new + ?,
+            total_topics = total_topics + ?,
+            last_fetched_count = ?,
+            last_new_count = ?,
+            last_topic_count = ?,
+            last_duration_ms = ?,
+            last_preview = ?,
+            last_error = ?,
+            last_started_at = ?,
+            last_finished_at = ?,
+            updated_at = ?
+        WHERE source_key = ?
+        """,
+        (
+            summary.name,
+            summary.kind,
+            summary.category,
+            summary.status,
+            summary.fetched_count,
+            summary.new_count,
+            summary.topic_count,
+            summary.fetched_count,
+            summary.new_count,
+            summary.topic_count,
+            summary.duration_ms,
+            summary.preview,
+            summary.error,
+            started_at,
+            finished_at,
+            now,
+            summary.source_key,
+        ),
+    )
+
+
 def list_idea_cards(connection: sqlite3.Connection, limit: int = 50) -> list[dict]:
     rows = connection.execute(
         """
@@ -255,6 +407,54 @@ def list_articles(connection: sqlite3.Connection, limit: int = 100, status: str 
         FROM articles
         {where}
         ORDER BY COALESCE(score, 0) DESC, fetched_at DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
+def list_source_status(connection: sqlite3.Connection, limit: int = 100, status: str | None = None) -> list[dict]:
+    where = ""
+    params: list[object] = []
+    if status:
+        where = "WHERE status = ?"
+        params.append(status)
+    params.append(limit)
+    rows = connection.execute(
+        f"""
+        SELECT *
+        FROM source_status
+        {where}
+        ORDER BY
+            CASE status
+                WHEN 'ok' THEN 0
+                WHEN 'empty' THEN 1
+                WHEN 'disabled' THEN 2
+                ELSE 3
+            END,
+            last_new_count DESC,
+            last_finished_at DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
+def list_source_runs(connection: sqlite3.Connection, limit: int = 100, source_key: str | None = None) -> list[dict]:
+    where = ""
+    params: list[object] = []
+    if source_key:
+        where = "WHERE source_key = ?"
+        params.append(source_key)
+    params.append(limit)
+    rows = connection.execute(
+        f"""
+        SELECT *
+        FROM source_runs
+        {where}
+        ORDER BY finished_at DESC
         LIMIT ?
         """,
         params,
@@ -297,6 +497,8 @@ def stats(connection: sqlite3.Connection) -> dict[str, int | str]:
     topic_count = connection.execute("SELECT COUNT(*) AS count FROM opportunity_topics").fetchone()["count"]
     watch_count = connection.execute("SELECT COUNT(*) AS count FROM opportunity_topics WHERE status = 'watch'").fetchone()["count"]
     archive_count = connection.execute("SELECT COUNT(*) AS count FROM opportunity_topics WHERE status = 'archive'").fetchone()["count"]
+    source_count = connection.execute("SELECT COUNT(*) AS count FROM source_status").fetchone()["count"]
+    healthy_source_count = connection.execute("SELECT COUNT(*) AS count FROM source_status WHERE status = 'ok'").fetchone()["count"]
     latest = connection.execute("SELECT MAX(fetched_at) AS latest FROM articles").fetchone()["latest"]
     return {
         "articles": article_count,
@@ -304,6 +506,8 @@ def stats(connection: sqlite3.Connection) -> dict[str, int | str]:
         "topics": topic_count,
         "watching": watch_count,
         "archived": archive_count,
+        "sources": source_count,
+        "healthy_sources": healthy_source_count,
         "latest_fetch": latest or "",
     }
 
@@ -332,6 +536,7 @@ def _migrate(connection: sqlite3.Connection) -> None:
             "recommendation": "TEXT DEFAULT 'archive'",
             "next_action": "TEXT DEFAULT ''",
             "topic_key": "TEXT DEFAULT ''",
+            "source_key": "TEXT DEFAULT ''",
         },
     )
     idea_columns = _columns(connection, "idea_cards")
@@ -343,6 +548,7 @@ def _migrate(connection: sqlite3.Connection) -> None:
             "recommendation": "TEXT DEFAULT 'validate'",
             "next_action": "TEXT DEFAULT ''",
             "topic_key": "TEXT DEFAULT ''",
+            "source_key": "TEXT DEFAULT ''",
         },
     )
 

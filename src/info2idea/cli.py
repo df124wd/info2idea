@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .pipeline import run_pipeline
 from .server import serve
-from .storage import connect, list_articles, list_idea_cards, list_opportunity_topics, stats
+from .storage import connect, list_articles, list_idea_cards, list_opportunity_topics, list_source_runs, list_source_status, stats
 
 
 def main() -> None:
@@ -30,6 +30,14 @@ def main() -> None:
     topic_parser.add_argument("--limit", type=int, default=50)
     topic_parser.add_argument("--status", default=None, help="Filter by topic status.")
 
+    source_parser = subparsers.add_parser("sources", help="Print source health status as JSON.")
+    source_parser.add_argument("--limit", type=int, default=100)
+    source_parser.add_argument("--status", default=None, help="Filter by source status.")
+
+    run_history_parser = subparsers.add_parser("source-runs", help="Print source run history as JSON.")
+    run_history_parser.add_argument("--limit", type=int, default=100)
+    run_history_parser.add_argument("--source-key", default=None)
+
     subparsers.add_parser("stats", help="Print database stats as JSON.")
 
     serve_parser = subparsers.add_parser("serve", help="Start the local dashboard.")
@@ -48,6 +56,7 @@ def main() -> None:
                 "inserted_articles": result.inserted_articles,
                 "inserted_ideas": result.inserted_ideas,
                 "inserted_topics": result.inserted_topics,
+                "source_runs": result.source_runs,
                 "failed_sources": result.failed_sources or {},
             }
         )
@@ -65,6 +74,10 @@ def main() -> None:
             _print_json(list_articles(connection, args.limit, args.status))
         elif args.command == "topics":
             _print_json(list_opportunity_topics(connection, args.limit, args.status))
+        elif args.command == "sources":
+            _print_json(list_source_status(connection, args.limit, args.status))
+        elif args.command == "source-runs":
+            _print_json(list_source_runs(connection, args.limit, args.source_key))
         elif args.command == "stats":
             _print_json(stats(connection))
     finally:

@@ -26,12 +26,20 @@ def load_sources(path: str | Path) -> list[FeedSource]:
 def fetch_source(source: FeedSource, timeout: int = 20) -> list[Article]:
     if source.kind == "github_search":
         return _fetch_github_search(source, timeout)
+    if source.kind == "github_issues":
+        return _fetch_github_issues(source, timeout)
+    if source.kind == "google_news":
+        return _fetch_google_news(source, timeout)
+    if source.kind == "hn_search":
+        return _fetch_hn_search(source, timeout)
     if source.kind == "manual_json":
         return _fetch_manual_json(source)
     if source.kind == "reddit_rss":
         return _fetch_reddit_rss(source, timeout)
+    if source.kind == "reddit_search":
+        return _fetch_reddit_search(source, timeout)
     payload = _read_source_payload(source.url, timeout)
-    return parse_feed(payload, source)
+    return _stamp_source(parse_feed(payload, source), source)
 
 
 def parse_feed(payload: bytes | str, source: FeedSource) -> list[Article]:
@@ -84,6 +92,51 @@ def _fetch_github_search(source: FeedSource, timeout: int) -> list[Article]:
                 summary=" | ".join(part for part in summary_parts if part),
                 published_at=_parse_date(item.get("pushed_at") or item.get("updated_at") or ""),
                 raw_id=str(item.get("id") or html_url),
+                source_key=source.source_key,
+            )
+        )
+    return articles
+
+
+def _fetch_github_issues(source: FeedSource, timeout: int) -> list[Article]:
+    query = source.query or source.params.get("q", "")
+    if not query:
+        return []
+    limit = max(1, min(source.limit, 50))
+    url = "https://api.github.com/search/issues?" + _encode_query(
+        {
+            "q": query,
+            "sort": source.params.get("sort", "updated"),
+            "order": source.params.get("order", "desc"),
+            "per_page": str(limit),
+        }
+    )
+    payload = json.loads(_read_http(url, timeout).decode("utf-8"))
+    articles = []
+    for item in payload.get("items", []):
+        title = item.get("title") or ""
+        html_url = item.get("html_url") or ""
+        if not title or not html_url:
+            continue
+        repo_url = item.get("repository_url", "").rsplit("/", 1)[-1]
+        labels = ", ".join(label.get("name", "") for label in item.get("labels", []) if label.get("name"))
+        summary_parts = [
+            item.get("body") or "",
+            f"State: {item.get('state', 'unknown')}",
+            f"Comments: {item.get('comments', 0)}",
+            f"Repo: {repo_url}",
+            f"Labels: {labels}" if labels else "",
+        ]
+        articles.append(
+            Article(
+                source=source.name,
+                source_category=source.category,
+                title=f"GitHub issue: {title}",
+                url=html_url,
+                summary=_truncate(" | ".join(part for part in summary_parts if part), 900),
+                published_at=_parse_date(item.get("updated_at") or item.get("created_at") or ""),
+                raw_id=str(item.get("id") or html_url),
+                source_key=source.source_key,
             )
         )
     return articles
@@ -97,7 +150,88 @@ def _fetch_reddit_rss(source: FeedSource, timeout: int) -> list[Article]:
     if not url:
         return []
     payload = _read_source_payload(url, timeout)
-    return parse_feed(payload, source)
+    return _stamp_source(parse_feed(payload, source), source)
+
+
+def _fetch_reddit_search(source: FeedSource, timeout: int) -> list[Article]:
+    query = source.query or source.params.get("q", "")
+    if not query:
+        return []
+    subreddit = str(source.params.get("subreddit", "")).strip().strip("/")
+    sort = str(source.params.get("sort", "new"))
+    time_filter = str(source.params.get("time", "week"))
+    base = f"https://www.reddit.com/r/{subreddit}/search.rss" if subreddit else "https://www.reddit.com/search.rss"
+    url = base + "?" + _encode_query(
+        {
+            "q": query,
+            "restrict_sr": "1" if subreddit else "0",
+            "sort": sort,
+            "t": time_filter,
+        }
+    )
+    payload = _read_source_payload(url, timeout)
+    return _stamp_source(parse_feed(payload, source), source)
+
+
+def _fetch_google_news(source: FeedSource, timeout: int) -> list[Article]:
+    query = source.query or source.params.get("q", "")
+    if not query:
+        return []
+    language = source.params.get("hl", "en-US")
+    region = source.params.get("gl", "US")
+    ceid = source.params.get("ceid", "US:en")
+    url = "https://news.google.com/rss/search?" + _encode_query(
+        {
+            "q": query,
+            "hl": language,
+            "gl": region,
+            "ceid": ceid,
+        }
+    )
+    payload = _read_source_payload(url, timeout)
+    articles = _stamp_source(parse_feed(payload, source), source)
+    return articles[: max(1, source.limit)]
+
+
+def _fetch_hn_search(source: FeedSource, timeout: int) -> list[Article]:
+    query = source.query or source.params.get("query", "")
+    if not query:
+        return []
+    tags = str(source.params.get("tags", "story"))
+    numeric_filters = str(source.params.get("numericFilters", ""))
+    params = {
+        "query": query,
+        "tags": tags,
+        "hitsPerPage": str(max(1, min(source.limit, 50))),
+    }
+    if numeric_filters:
+        params["numericFilters"] = numeric_filters
+    url = "https://hn.algolia.com/api/v1/search_by_date?" + _encode_query(params)
+    payload = json.loads(_read_http(url, timeout).decode("utf-8"))
+    articles = []
+    for item in payload.get("hits", []):
+        title = item.get("title") or item.get("story_title") or ""
+        item_url = item.get("url") or f"https://news.ycombinator.com/item?id={item.get('objectID')}"
+        if not title or not item_url:
+            continue
+        summary_parts = [
+            f"Points: {item.get('points', 0)}",
+            f"Comments: {item.get('num_comments', 0)}",
+            f"Author: {item.get('author', 'unknown')}",
+        ]
+        articles.append(
+            Article(
+                source=source.name,
+                source_category=source.category,
+                title=f"HN: {title}",
+                url=item_url,
+                summary=" | ".join(summary_parts),
+                published_at=_parse_date(item.get("created_at", "")),
+                raw_id=str(item.get("objectID") or item_url),
+                source_key=source.source_key,
+            )
+        )
+    return articles
 
 
 def _fetch_manual_json(source: FeedSource) -> list[Article]:
@@ -120,6 +254,7 @@ def _fetch_manual_json(source: FeedSource) -> list[Article]:
                 summary=str(item.get("summary", "")).strip(),
                 published_at=_parse_date(str(item.get("published_at", ""))),
                 raw_id=str(item.get("id", url)),
+                source_key=source.source_key,
             )
         )
     return articles
@@ -218,6 +353,19 @@ def _local_name(tag: str) -> str:
 def _clean(value: str) -> str:
     value = TAG_RE.sub(" ", value or "")
     return " ".join(unescape(value).split())
+
+
+def _stamp_source(articles: list[Article], source: FeedSource) -> list[Article]:
+    for article in articles:
+        article.source_key = source.source_key
+    return articles
+
+
+def _truncate(value: str, limit: int) -> str:
+    value = " ".join((value or "").split())
+    if len(value) <= limit:
+        return value
+    return f"{value[: limit - 3].rstrip()}..."
 
 
 def _parse_date(value: str) -> datetime | None:

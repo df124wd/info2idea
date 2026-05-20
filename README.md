@@ -82,7 +82,11 @@ Supported source kinds in the MVP:
 
 - `rss`
 - `reddit_rss`
+- `reddit_search`
 - `github_search`
+- `github_issues`
+- `google_news`
+- `hn_search`
 - `manual_json`
 
 Supported categories in the MVP:
@@ -96,6 +100,27 @@ Supported categories in the MVP:
 Local XML files are also supported, which makes tests and offline demos cheap.
 
 You can also use manual JSON signal files for platforms that are hard to crawl cleanly at the start.
+
+## Source Monitoring
+
+Every collection run records source health:
+
+- source status: `ok`, `empty`, `error`, or `disabled`
+- fetched count
+- newly inserted signal count
+- newly created topic count
+- duration
+- latest error message
+- preview titles
+
+Use the CLI:
+
+```powershell
+python -m info2idea.cli sources --limit 50
+python -m info2idea.cli source-runs --limit 100
+```
+
+This is important because the product is meant to watch markets over time. A quiet source, a broken source, and a source producing strong new signals should not look the same.
 
 ## Testing
 

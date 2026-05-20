@@ -73,6 +73,7 @@ def build_idea_card(article: Article, score: OpportunityScore) -> IdeaCard:
         recommendation=score.recommendation,
         next_action=score.next_action,
         topic_key=score.topic_key,
+        source_key=article.source_key,
     )
 
 

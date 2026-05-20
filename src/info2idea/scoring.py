@@ -259,6 +259,14 @@ def score_article(article: Article) -> OpportunityScore:
     )
 
 
+def apply_source_weight(score: OpportunityScore, weight: float) -> OpportunityScore:
+    score.source_weight = weight
+    score.total = round(max(0.0, min(100.0, score.total * weight)), 2)
+    score.recommendation = _recommendation(score.total)
+    score.next_action = _next_action(score.recommendation)
+    return score
+
+
 def _keyword_hits(text: str) -> list[str]:
     counter: Counter[str] = Counter()
     for keywords in DOMAIN_KEYWORDS.values():

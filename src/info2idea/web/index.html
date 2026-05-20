@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,24 +10,32 @@
     <header class="topbar">
       <div>
         <h1>Info2Idea</h1>
-        <p>Opportunity radar · Idea engine · Long-term market memory</p>
+        <p>Opportunity radar · Idea engine · Source monitor</p>
       </div>
-      <button id="run-button" type="button">刷新情报</button>
+      <button id="run-button" type="button">Refresh</button>
     </header>
 
     <main>
-      <section class="metrics" aria-label="概览">
+      <section class="metrics" aria-label="Overview">
         <article>
-          <span>资讯</span>
+          <span>Signals</span>
           <strong id="article-count">0</strong>
         </article>
         <article>
-          <span>Idea</span>
+          <span>Ideas</span>
           <strong id="idea-count">0</strong>
         </article>
         <article>
           <span>Topics</span>
           <strong id="topic-count">0</strong>
+        </article>
+        <article>
+          <span>Sources</span>
+          <strong id="source-count">0</strong>
+        </article>
+        <article>
+          <span>Healthy</span>
+          <strong id="healthy-source-count">0</strong>
         </article>
         <article>
           <span>Watching</span>
@@ -41,6 +49,14 @@
           <span>Latest fetch</span>
           <strong id="latest-fetch">-</strong>
         </article>
+      </section>
+
+      <section class="source-panel">
+        <div class="section-title">
+          <h2>Source Health</h2>
+          <span>Last collection run by source</span>
+        </div>
+        <div id="source-list" class="source-list"></div>
       </section>
 
       <section class="layout">

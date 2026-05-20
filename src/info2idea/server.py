@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .pipeline import run_pipeline
-from .storage import connect, list_articles, list_idea_cards, list_opportunity_topics, stats
+from .storage import connect, list_articles, list_idea_cards, list_opportunity_topics, list_source_runs, list_source_status, stats
 
 
 WEB_DIR = Path(__file__).with_name("web")
@@ -37,6 +37,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             status = _status(parsed.query)
             self._json_response(_with_connection(self.db_path, lambda connection: list_opportunity_topics(connection, limit, status)))
             return
+        if parsed.path == "/api/sources":
+            limit = _limit(parsed.query, default=100)
+            status = _status(parsed.query)
+            self._json_response(_with_connection(self.db_path, lambda connection: list_source_status(connection, limit, status)))
+            return
+        if parsed.path == "/api/source-runs":
+            limit = _limit(parsed.query, default=100)
+            source_key = parse_qs(parsed.query).get("source_key", [""])[0].strip() or None
+            self._json_response(_with_connection(self.db_path, lambda connection: list_source_runs(connection, limit, source_key)))
+            return
         if parsed.path in {"/", "/index.html"}:
             self._serve_file(WEB_DIR / "index.html")
             return
@@ -52,6 +62,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "inserted_articles": result.inserted_articles,
                     "inserted_ideas": result.inserted_ideas,
                     "inserted_topics": result.inserted_topics,
+                    "source_runs": result.source_runs,
                     "failed_sources": result.failed_sources or {},
                 }
             )
