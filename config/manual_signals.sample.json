@@ -1,0 +1,18 @@
+[
+  {
+    "id": "manual-cn-1",
+    "source": "Manual CN Signals",
+    "category": "content",
+    "title": "AI 学习路线短视频评论区反复出现“不会做项目”的问题",
+    "url": "manual://bilibili/ai-project-learning",
+    "summary": "适合观察是否能做成项目制课程、代码模板、陪跑服务或自动化选题号。"
+  },
+  {
+    "id": "manual-cn-2",
+    "source": "Manual CN Signals",
+    "category": "content",
+    "title": "小红书独立开发副业笔记里，用户更关心从 0 到第一单",
+    "url": "manual://xiaohongshu/indie-first-order",
+    "summary": "先手动归档，不做平台爬虫；观察后续是否出现工具、模板、课程和咨询需求。"
+  }
+]

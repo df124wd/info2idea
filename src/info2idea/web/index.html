@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Info2Idea</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Info2Idea</h1>
+        <p>Opportunity radar · Idea engine · Long-term market memory</p>
+      </div>
+      <button id="run-button" type="button">刷新情报</button>
+    </header>
+
+    <main>
+      <section class="metrics" aria-label="概览">
+        <article>
+          <span>资讯</span>
+          <strong id="article-count">0</strong>
+        </article>
+        <article>
+          <span>Idea</span>
+          <strong id="idea-count">0</strong>
+        </article>
+        <article>
+          <span>Topics</span>
+          <strong id="topic-count">0</strong>
+        </article>
+        <article>
+          <span>Watching</span>
+          <strong id="watch-count">0</strong>
+        </article>
+        <article>
+          <span>Archived</span>
+          <strong id="archive-count">0</strong>
+        </article>
+        <article>
+          <span>Latest fetch</span>
+          <strong id="latest-fetch">-</strong>
+        </article>
+      </section>
+
+      <section class="layout">
+        <div>
+          <div class="section-title">
+            <h2>High-Signal Ideas</h2>
+            <span id="run-status"></span>
+          </div>
+          <div id="idea-list" class="idea-list"></div>
+        </div>
+
+        <aside>
+          <h2>Opportunity Topics</h2>
+          <div id="topic-list" class="article-list"></div>
+          <h2 class="aside-title">Recent Signals</h2>
+          <div id="article-list" class="article-list"></div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

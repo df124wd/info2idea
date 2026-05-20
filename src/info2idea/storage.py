@@ -1,0 +1,387 @@
+from __future__ import annotations
+
+import sqlite3
+from collections.abc import Iterable
+from datetime import datetime, timezone
+from pathlib import Path
+
+from .models import Article, IdeaCard, OpportunityScore
+
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS articles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL,
+    source_category TEXT NOT NULL,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    published_at TEXT,
+    fetched_at TEXT NOT NULL,
+    score REAL,
+    domain TEXT,
+    confidence REAL,
+    reasons TEXT,
+    matched_keywords TEXT,
+    dimension_scores TEXT,
+    risk_penalty REAL DEFAULT 0,
+    recommendation TEXT DEFAULT 'archive',
+    next_action TEXT DEFAULT '',
+    topic_key TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS idea_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_url TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    domain TEXT NOT NULL,
+    score REAL NOT NULL,
+    target_user TEXT NOT NULL,
+    pain_point TEXT NOT NULL,
+    product_idea TEXT NOT NULL,
+    monetization TEXT NOT NULL,
+    mvp_steps TEXT NOT NULL,
+    content_angle TEXT NOT NULL,
+    validation_plan TEXT NOT NULL,
+    risks TEXT NOT NULL,
+    recommendation TEXT DEFAULT 'validate',
+    next_action TEXT DEFAULT '',
+    topic_key TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS opportunity_topics (
+    topic_key TEXT PRIMARY KEY,
+    domain TEXT NOT NULL,
+    status TEXT NOT NULL,
+    title TEXT NOT NULL,
+    signal_count INTEGER NOT NULL DEFAULT 0,
+    best_score REAL NOT NULL DEFAULT 0,
+    average_score REAL NOT NULL DEFAULT 0,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    last_article_url TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    next_action TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
+
+
+def connect(db_path: str | Path) -> sqlite3.Connection:
+    path = Path(db_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path)
+    connection.row_factory = sqlite3.Row
+    connection.executescript(SCHEMA)
+    _migrate(connection)
+    return connection
+
+
+def upsert_article(connection: sqlite3.Connection, article: Article, score: OpportunityScore | None = None) -> bool:
+    existing = connection.execute(
+        "SELECT id FROM articles WHERE fingerprint = ? OR url = ?",
+        (article.fingerprint, article.url),
+    ).fetchone()
+    if existing:
+        return False
+
+    connection.execute(
+        """
+        INSERT INTO articles (
+            fingerprint, source, source_category, title, url, summary,
+            published_at, fetched_at, score, domain, confidence, reasons, matched_keywords,
+            dimension_scores, risk_penalty, recommendation, next_action, topic_key
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            article.fingerprint,
+            article.source,
+            article.source_category,
+            article.title,
+            article.url,
+            article.summary,
+            _to_iso(article.published_at),
+            _to_iso(article.fetched_at),
+            score.total if score else None,
+            score.domain if score else None,
+            score.confidence if score else None,
+            "\n".join(score.reasons) if score else "",
+            ", ".join(score.matched_keywords) if score else "",
+            _json_dumps(score.dimension_scores) if score else "{}",
+            score.risk_penalty if score else 0.0,
+            score.recommendation if score else "archive",
+            score.next_action if score else "",
+            score.topic_key if score else "",
+        ),
+    )
+    return True
+
+
+def upsert_idea_card(connection: sqlite3.Connection, card: IdeaCard) -> bool:
+    existing = connection.execute(
+        "SELECT id FROM idea_cards WHERE article_url = ?",
+        (card.article_url,),
+    ).fetchone()
+    if existing:
+        return False
+    connection.execute(
+        """
+        INSERT INTO idea_cards (
+            article_url, title, domain, score, target_user, pain_point, product_idea,
+            monetization, mvp_steps, content_angle, validation_plan, risks,
+            recommendation, next_action, topic_key, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            card.article_url,
+            card.title,
+            card.domain,
+            card.score,
+            card.target_user,
+            card.pain_point,
+            card.product_idea,
+            card.monetization,
+            "\n".join(card.mvp_steps),
+            card.content_angle,
+            "\n".join(card.validation_plan),
+            "\n".join(card.risks),
+            card.recommendation,
+            card.next_action,
+            card.topic_key,
+            _to_iso(card.created_at),
+        ),
+    )
+    return True
+
+
+def upsert_opportunity_topic(connection: sqlite3.Connection, article: Article, score: OpportunityScore) -> bool:
+    now = _to_iso(datetime.now(timezone.utc)) or ""
+    existing = connection.execute(
+        "SELECT * FROM opportunity_topics WHERE topic_key = ?",
+        (score.topic_key,),
+    ).fetchone()
+    evidence_line = f"{article.title} ({article.source}) - {score.total:.1f}"
+    if not existing:
+        connection.execute(
+            """
+            INSERT INTO opportunity_topics (
+                topic_key, domain, status, title, signal_count, best_score, average_score,
+                first_seen, last_seen, last_article_url, evidence, next_action, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                score.topic_key,
+                score.domain,
+                _status_from_score(score),
+                article.title,
+                1,
+                score.total,
+                score.total,
+                _to_iso(article.fetched_at) or now,
+                _to_iso(article.fetched_at) or now,
+                article.url,
+                evidence_line,
+                score.next_action,
+                now,
+            ),
+        )
+        return True
+
+    signal_count = int(existing["signal_count"]) + 1
+    best_score = max(float(existing["best_score"]), score.total)
+    average_score = ((float(existing["average_score"]) * int(existing["signal_count"])) + score.total) / signal_count
+    status = _promote_status(str(existing["status"]), score, signal_count)
+    evidence = _append_evidence(str(existing["evidence"]), evidence_line)
+    connection.execute(
+        """
+        UPDATE opportunity_topics
+        SET domain = ?,
+            status = ?,
+            signal_count = ?,
+            best_score = ?,
+            average_score = ?,
+            last_seen = ?,
+            last_article_url = ?,
+            evidence = ?,
+            next_action = ?,
+            updated_at = ?
+        WHERE topic_key = ?
+        """,
+        (
+            score.domain,
+            status,
+            signal_count,
+            best_score,
+            round(average_score, 2),
+            _to_iso(article.fetched_at) or now,
+            article.url,
+            evidence,
+            score.next_action,
+            now,
+            score.topic_key,
+        ),
+    )
+    return False
+
+
+def list_idea_cards(connection: sqlite3.Connection, limit: int = 50) -> list[dict]:
+    rows = connection.execute(
+        """
+        SELECT *
+        FROM idea_cards
+        ORDER BY score DESC, created_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
+def list_articles(connection: sqlite3.Connection, limit: int = 100, status: str | None = None) -> list[dict]:
+    where = ""
+    params: list[object] = []
+    if status:
+        where = "WHERE recommendation = ?"
+        params.append(status)
+    params.append(limit)
+    rows = connection.execute(
+        f"""
+        SELECT *
+        FROM articles
+        {where}
+        ORDER BY COALESCE(score, 0) DESC, fetched_at DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
+def list_opportunity_topics(connection: sqlite3.Connection, limit: int = 50, status: str | None = None) -> list[dict]:
+    where = ""
+    params: list[object] = []
+    if status:
+        where = "WHERE status = ?"
+        params.append(status)
+    params.append(limit)
+    rows = connection.execute(
+        f"""
+        SELECT *
+        FROM opportunity_topics
+        {where}
+        ORDER BY
+            CASE status
+                WHEN 'build_now' THEN 0
+                WHEN 'validate_7_days' THEN 1
+                WHEN 'watch' THEN 2
+                ELSE 3
+            END,
+            best_score DESC,
+            signal_count DESC,
+            last_seen DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
+def stats(connection: sqlite3.Connection) -> dict[str, int | str]:
+    article_count = connection.execute("SELECT COUNT(*) AS count FROM articles").fetchone()["count"]
+    idea_count = connection.execute("SELECT COUNT(*) AS count FROM idea_cards").fetchone()["count"]
+    topic_count = connection.execute("SELECT COUNT(*) AS count FROM opportunity_topics").fetchone()["count"]
+    watch_count = connection.execute("SELECT COUNT(*) AS count FROM opportunity_topics WHERE status = 'watch'").fetchone()["count"]
+    archive_count = connection.execute("SELECT COUNT(*) AS count FROM opportunity_topics WHERE status = 'archive'").fetchone()["count"]
+    latest = connection.execute("SELECT MAX(fetched_at) AS latest FROM articles").fetchone()["latest"]
+    return {
+        "articles": article_count,
+        "ideas": idea_count,
+        "topics": topic_count,
+        "watching": watch_count,
+        "archived": archive_count,
+        "latest_fetch": latest or "",
+    }
+
+
+def _row_to_dict(row: sqlite3.Row) -> dict:
+    return {key: row[key] for key in row.keys()}
+
+
+def _to_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    article_columns = _columns(connection, "articles")
+    _add_missing_columns(
+        connection,
+        "articles",
+        article_columns,
+        {
+            "dimension_scores": "TEXT",
+            "risk_penalty": "REAL DEFAULT 0",
+            "recommendation": "TEXT DEFAULT 'archive'",
+            "next_action": "TEXT DEFAULT ''",
+            "topic_key": "TEXT DEFAULT ''",
+        },
+    )
+    idea_columns = _columns(connection, "idea_cards")
+    _add_missing_columns(
+        connection,
+        "idea_cards",
+        idea_columns,
+        {
+            "recommendation": "TEXT DEFAULT 'validate'",
+            "next_action": "TEXT DEFAULT ''",
+            "topic_key": "TEXT DEFAULT ''",
+        },
+    )
+
+
+def _columns(connection: sqlite3.Connection, table: str) -> set[str]:
+    rows = connection.execute(f"PRAGMA table_info({table})").fetchall()
+    return {str(row["name"]) for row in rows}
+
+
+def _add_missing_columns(connection: sqlite3.Connection, table: str, existing: set[str], columns: dict[str, str]) -> None:
+    for name, definition in columns.items():
+        if name not in existing:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+
+
+def _json_dumps(value: object) -> str:
+    import json
+
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _status_from_score(score: OpportunityScore) -> str:
+    return score.recommendation
+
+
+def _promote_status(current: str, score: OpportunityScore, signal_count: int) -> str:
+    ranked = ["archive", "watch", "validate_7_days", "build_now"]
+    candidate = score.recommendation
+    if current == "archive" and signal_count >= 2 and score.total >= 45:
+        candidate = "watch"
+    if current == "watch" and signal_count >= 3 and score.total >= 60:
+        candidate = "validate_7_days"
+    return max(current, candidate, key=lambda status: ranked.index(status) if status in ranked else 0)
+
+
+def _append_evidence(existing: str, line: str, limit: int = 8) -> str:
+    lines = [item for item in [*existing.splitlines(), line] if item.strip()]
+    deduped: list[str] = []
+    for item in lines:
+        if item not in deduped:
+            deduped.append(item)
+    return "\n".join(deduped[-limit:])

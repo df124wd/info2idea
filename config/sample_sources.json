@@ -1,0 +1,8 @@
+[
+  {
+    "name": "Local Sample Feed",
+    "url": "config/sample_feed.xml",
+    "category": "mixed",
+    "weight": 1.0
+  }
+]

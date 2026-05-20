@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>Info2Idea Sample Feed</title>
+    <link>https://example.com</link>
+    <description>Local sample feed for tests and offline demos.</description>
+    <item>
+      <title>AI agents are changing how small teams build customer support tools</title>
+      <link>https://example.com/ai-agents-customer-support</link>
+      <description>New open source agent workflows let indie developers ship support automation for niche SaaS teams with low infrastructure cost.</description>
+      <pubDate>Wed, 20 May 2026 08:30:00 GMT</pubDate>
+      <guid>sample-1</guid>
+    </item>
+    <item>
+      <title>Solo game developers are selling asset packs around cozy simulation mechanics</title>
+      <link>https://example.com/cozy-sim-asset-packs</link>
+      <description>Creators are earning recurring revenue by packaging templates, sprites, and production notes for small game studios.</description>
+      <pubDate>Wed, 20 May 2026 09:00:00 GMT</pubDate>
+      <guid>sample-2</guid>
+    </item>
+    <item>
+      <title>Short-form education channels use automation to publish daily market explainers</title>
+      <link>https://example.com/short-form-education-automation</link>
+      <description>Content creators combine data feeds, scripts, and editing templates to scale high-retention explainers for business students.</description>
+      <pubDate>Wed, 20 May 2026 09:30:00 GMT</pubDate>
+      <guid>sample-3</guid>
+    </item>
+  </channel>
+</rss>

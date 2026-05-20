@@ -1,0 +1,84 @@
+[
+  {
+    "name": "Hacker News",
+    "kind": "rss",
+    "url": "https://news.ycombinator.com/rss",
+    "category": "indie_dev",
+    "weight": 1.0
+  },
+  {
+    "name": "Product Hunt",
+    "kind": "rss",
+    "url": "https://www.producthunt.com/feed",
+    "category": "ai_tools",
+    "weight": 1.1
+  },
+  {
+    "name": "OpenAI News",
+    "kind": "rss",
+    "url": "https://openai.com/news/rss.xml",
+    "category": "ai_tools",
+    "weight": 1.15
+  },
+  {
+    "name": "Google DeepMind Blog",
+    "kind": "rss",
+    "url": "https://deepmind.google/discover/blog/rss.xml",
+    "category": "ai_tools",
+    "weight": 1.05
+  },
+  {
+    "name": "Gamasutra / Game Developer",
+    "kind": "rss",
+    "url": "https://www.gamedeveloper.com/rss.xml",
+    "category": "games",
+    "weight": 0.95
+  },
+  {
+    "name": "GitHub AI Tools",
+    "kind": "github_search",
+    "query": "topic:ai-tool OR topic:llm stars:>50 pushed:>2026-01-01",
+    "category": "ai_tools",
+    "limit": 20,
+    "weight": 1.15,
+    "params": {
+      "sort": "stars",
+      "order": "desc"
+    }
+  },
+  {
+    "name": "GitHub Indie Dev Utilities",
+    "kind": "github_search",
+    "query": "topic:productivity OR topic:automation stars:>50 pushed:>2026-01-01",
+    "category": "indie_dev",
+    "limit": 20,
+    "weight": 1.05,
+    "params": {
+      "sort": "updated",
+      "order": "desc"
+    }
+  },
+  {
+    "name": "Reddit SideProject",
+    "kind": "reddit_rss",
+    "url": "https://www.reddit.com/r/SideProject/.rss",
+    "category": "indie_dev",
+    "limit": 20,
+    "weight": 1.0
+  },
+  {
+    "name": "Reddit Gamedev",
+    "kind": "reddit_rss",
+    "url": "https://www.reddit.com/r/gamedev/.rss",
+    "category": "games",
+    "limit": 20,
+    "weight": 1.0
+  },
+  {
+    "name": "Manual CN Signals",
+    "kind": "manual_json",
+    "url": "config/manual_signals.sample.json",
+    "category": "content",
+    "weight": 1.0
+  }
+]
