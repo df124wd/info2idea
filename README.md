@@ -1,6 +1,6 @@
 # Info2Idea
 
-Info2Idea is a local-first opportunity radar for a solo builder. It tracks public information feeds, scores signals in your focus areas, and turns high-signal items into monetizable idea cards.
+Info2Idea is a local-first opportunity radar for a solo builder. It tracks public information feeds, scores signals in your focus areas, and turns both strong and weak signals into a long-term opportunity memory.
 
 The first version is intentionally low-cost:
 
@@ -17,8 +17,10 @@ The current MVP follows this pipeline:
 1. Fetch configured RSS/Atom feeds.
 2. Normalize articles and deduplicate them in SQLite.
 3. Score each article against your preferred domains: AI tools, content business, indie development, and games.
-4. Generate an idea card when a signal is strong enough.
-5. Show ideas and recent signals in a local dashboard.
+4. Classify each signal into build now, validate in 7 days, watch, or archive.
+5. Store weak signals as reusable topics so they can return later with more evidence.
+6. Generate an idea card when a signal is strong enough.
+7. Show ideas, topics, and recent signals in a local dashboard.
 
 Each idea card includes:
 
@@ -30,6 +32,8 @@ Each idea card includes:
 - Content angle
 - Validation plan
 - Risks
+- Recommendation
+- Next action
 
 ## Quick Start
 
@@ -54,6 +58,12 @@ python -m info2idea.cli run
 python scripts/run_dashboard.py
 ```
 
+To inspect long-term topics:
+
+```powershell
+python -m info2idea.cli topics --limit 20
+```
+
 ## Configuration
 
 Edit `config/sources.json` to add or remove sources:
@@ -61,11 +71,19 @@ Edit `config/sources.json` to add or remove sources:
 ```json
 {
   "name": "Hacker News",
+  "kind": "rss",
   "url": "https://news.ycombinator.com/rss",
   "category": "indie_dev",
   "weight": 1.0
 }
 ```
+
+Supported source kinds in the MVP:
+
+- `rss`
+- `reddit_rss`
+- `github_search`
+- `manual_json`
 
 Supported categories in the MVP:
 
@@ -76,6 +94,8 @@ Supported categories in the MVP:
 - `mixed`
 
 Local XML files are also supported, which makes tests and offline demos cheap.
+
+You can also use manual JSON signal files for platforms that are hard to crawl cleanly at the start.
 
 ## Testing
 
@@ -114,6 +134,25 @@ Add a cron job:
 ```
 
 For public access, put Caddy or Nginx in front of the dashboard and add basic auth.
+
+## Dependency Management
+
+Use `uv` with `pyproject.toml` and a project-local `.venv`.
+
+Recommended flow:
+
+```powershell
+uv sync
+uv run python -m info2idea.cli run
+uv run python scripts/run_dashboard.py
+```
+
+Why this setup:
+
+- `pyproject.toml` keeps project metadata and dependencies in one place.
+- `uv` is fast, reproducible, and good for small solo projects.
+- `.venv` stays isolated and can be deleted and recreated anytime.
+- Conda is overkill here unless you later need heavy data science or GPU stacks.
 
 ## Roadmap
 

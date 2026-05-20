@@ -3,15 +3,15 @@
 Info2Idea is built around a small, replaceable pipeline:
 
 ```text
-Sources -> Fetch -> Normalize -> Score -> Idea Card -> Store -> Dashboard
+Sources -> Fetch -> Normalize -> Score -> Topic Memory -> Idea Card -> Store -> Dashboard
 ```
 
 ## Modules
 
 - `feeds.py`: loads sources and parses RSS/Atom into normalized articles.
-- `scoring.py`: scores articles using focus-domain, pain, monetization, actionability, and recency signals.
+- `scoring.py`: scores articles using focus-domain, pain, monetization, actionability, validation, reach, and recency signals.
 - `idea_engine.py`: turns a scored article into a structured business idea card.
-- `storage.py`: persists articles and idea cards in SQLite.
+- `storage.py`: persists articles, opportunity topics, and idea cards in SQLite.
 - `pipeline.py`: orchestrates one full collection and analysis run.
 - `server.py`: serves the dashboard and JSON APIs.
 - `web/`: static dashboard assets.
@@ -42,3 +42,9 @@ The highest-leverage next step is not adding more feeds. It is adding validation
 - Can a solo builder ship a useful first artifact in under one week?
 
 Those signals will make the system less like a news reader and more like a practical money radar.
+
+The topic memory layer matters just as much:
+
+- Weak signals are archived, not discarded.
+- Repeated weak signals become topics.
+- Topics can move from archive to watch to validate to build now as evidence accumulates.
