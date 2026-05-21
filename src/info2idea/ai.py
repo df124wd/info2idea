@@ -9,12 +9,16 @@ from .models import AIInsight, Article, OpportunityScore
 from .scoring import DIMENSION_WEIGHTS, score_article
 
 
-DEFAULT_AI_MODEL = "gpt-4o-mini"
+DEFAULT_AI_BASE_URL = "https://api.deepseek.com"
+DEFAULT_AI_MODEL = "deepseek-chat"
 AI_SCORE_THRESHOLD = 50.0
 
 
 def ai_enabled() -> bool:
-    return bool(os.getenv("OPENAI_API_KEY"))
+    flag = os.getenv("INFO2IDEA_AI_ENABLED", "auto").strip().lower()
+    if flag in {"0", "false", "no", "off"}:
+        return False
+    return bool(_api_key())
 
 
 def maybe_enhance_score(article: Article, score: OpportunityScore, threshold: float = AI_SCORE_THRESHOLD) -> OpportunityScore:
@@ -28,21 +32,22 @@ def maybe_enhance_score(article: Article, score: OpportunityScore, threshold: fl
 def enhance_score_with_ai(article: Article, score: OpportunityScore) -> OpportunityScore:
     model = os.getenv("INFO2IDEA_AI_MODEL", DEFAULT_AI_MODEL)
     try:
-        insight = analyze_article_with_openai(article, score, model=model)
+        insight = analyze_article_with_deepseek(article, score, model=model)
     except (OSError, ValueError, urllib.error.URLError, TimeoutError) as exc:
         score.ai_error = str(exc)
         return score
     return merge_ai_insight(score, insight)
 
 
-def analyze_article_with_openai(article: Article, score: OpportunityScore, model: str = DEFAULT_AI_MODEL) -> AIInsight:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+def analyze_article_with_deepseek(article: Article, score: OpportunityScore, model: str = DEFAULT_AI_MODEL) -> AIInsight:
+    api_key = _api_key()
     if not api_key:
-        raise ValueError("OPENAI_API_KEY is not set.")
+        raise ValueError("DEEPSEEK_API_KEY is not set.")
 
     payload = {
         "model": model,
         "response_format": {"type": "json_object"},
+        "max_tokens": int(os.getenv("INFO2IDEA_AI_MAX_TOKENS", "1600")),
         "messages": [
             {
                 "role": "system",
@@ -58,8 +63,9 @@ def analyze_article_with_openai(article: Article, score: OpportunityScore, model
         ],
         "temperature": 0.2,
     }
+    base_url = os.getenv("INFO2IDEA_AI_BASE_URL", DEFAULT_AI_BASE_URL).rstrip("/")
     request = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
+        f"{base_url}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -70,8 +76,12 @@ def analyze_article_with_openai(article: Article, score: OpportunityScore, model
     with urllib.request.urlopen(request, timeout=30) as response:
         body = json.loads(response.read().decode("utf-8"))
     content = body["choices"][0]["message"]["content"]
-    parsed = json.loads(content)
+    parsed = _loads_json_object(content)
     return _insight_from_json(parsed, model=model, raw_response=content)
+
+
+def analyze_article_with_openai(article: Article, score: OpportunityScore, model: str = DEFAULT_AI_MODEL) -> AIInsight:
+    return analyze_article_with_deepseek(article, score, model)
 
 
 def merge_ai_insight(score: OpportunityScore, insight: AIInsight) -> OpportunityScore:
@@ -191,6 +201,35 @@ def _insight_from_json(data: dict, model: str, raw_response: str) -> AIInsight:
         model=model,
         raw_response=raw_response,
     )
+
+
+def _api_key() -> str:
+    return (
+        os.getenv("DEEPSEEK_API_KEY", "").strip()
+        or os.getenv("INFO2IDEA_AI_API_KEY", "").strip()
+    )
+
+
+def _loads_json_object(content: str) -> dict:
+    text = content.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start < 0 or end < start:
+            raise
+        parsed = json.loads(text[start : end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError("AI response must be a JSON object.")
+    return parsed
 
 
 def _weighted_score(dimensions: dict[str, float]) -> float:

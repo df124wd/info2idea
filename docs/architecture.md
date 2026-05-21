@@ -13,6 +13,7 @@ Sources -> Fetch -> Normalize -> Rule Score -> Optional AI Analysis -> Topic Mem
 - `scoring.py`: scores articles using focus-domain, pain, monetization, actionability, validation, reach, and recency signals.
 - `idea_engine.py`: turns a scored article into a structured business idea card.
 - `storage.py`: persists articles, opportunity topics, idea cards, source runs, and source health in SQLite.
+- `inbox.py`: powers the daily review workflow, feedback updates, and per-signal DeepSeek deep dives.
 - `pipeline.py`: orchestrates one full collection and analysis run.
 - `server.py`: serves the dashboard and JSON APIs.
 - `web/`: static dashboard assets.
@@ -33,12 +34,34 @@ That is why the MVP avoids paid infrastructure and heavy frameworks. The archite
 - RSS sources can be joined by browser automation and official APIs.
 - The static dashboard can become Next.js when the product surface needs accounts, saved views, or collaboration.
 
+## Database Direction
+
+Use SQLite for the personal MVP and early open-source version. It is the right default while the system is single-user, local-first, cheap to run, and mostly append-heavy.
+
+Move to PostgreSQL when any of these become true:
+
+- dashboard needs login, sharing, or multiple users
+- source jobs run on a VPS or worker separate from the dashboard
+- you need reliable concurrent writes, queues, or job locks
+- you add embeddings/vector search through `pgvector`
+- you need cloud backups, analytics queries, and migrations as product discipline
+
+Recommended path:
+
+1. Keep SQLite now, but isolate storage functions behind `storage.py`.
+2. Add schema migration files before the schema grows much further.
+3. When productizing, migrate to PostgreSQL with `articles`, `source_runs`, `source_status`, `opportunity_topics`, and `idea_cards` as first tables.
+4. Add `pgvector` only after you have enough archived signals for semantic recall to matter.
+
 ## Current Dashboard
 
 The dashboard is meant to be an information workbench, not just a list of links:
 
 - top metrics for signals, ideas, topics, source health, and AI-analyzed rows
 - source health cards with status, duration, latest counts, and errors
+- source quality panel with error, empty, and yield rates
+- signal inbox for today's review queue
+- per-signal actions: interested, later, ignored, and DeepSeek deep dive
 - filters for source status and opportunity status
 - high-signal idea cards
 - topic and recent-signal side panels

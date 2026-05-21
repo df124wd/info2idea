@@ -50,6 +50,14 @@
           <strong id="ai-count">0</strong>
         </article>
         <article>
+          <span>Interested</span>
+          <strong id="interested-count">0</strong>
+        </article>
+        <article>
+          <span>Later</span>
+          <strong id="later-count">0</strong>
+        </article>
+        <article>
           <span>Latest fetch</span>
           <strong id="latest-fetch">-</strong>
         </article>
@@ -67,6 +75,30 @@
           <button class="filter" data-source-status="error" type="button">Error</button>
         </div>
         <div id="source-list" class="source-list"></div>
+      </section>
+
+      <section class="insight-strip">
+        <section class="inbox-panel">
+          <div class="section-title">
+            <h2>Signal Inbox</h2>
+            <span>Review today's signals and choose what to deepen</span>
+          </div>
+          <div class="toolbar" aria-label="Inbox filters">
+            <button class="filter active" data-inbox-status="" type="button">All</button>
+            <button class="filter" data-inbox-status="new" type="button">New</button>
+            <button class="filter" data-inbox-status="interested" type="button">Interested</button>
+            <button class="filter" data-inbox-status="later" type="button">Later</button>
+            <button class="filter" data-inbox-status="ignored" type="button">Ignored</button>
+          </div>
+          <div id="inbox-list" class="inbox-list"></div>
+        </section>
+        <section>
+          <div class="section-title">
+            <h2>Source Quality</h2>
+            <span>Error, empty, and yield rates</span>
+          </div>
+          <div id="quality-list" class="compact-list"></div>
+        </section>
       </section>
 
       <section class="layout">

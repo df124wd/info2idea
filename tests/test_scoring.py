@@ -1,6 +1,6 @@
 import unittest
 
-from info2idea.ai import local_ai_like_insight, merge_ai_insight
+from info2idea.ai import _loads_json_object, local_ai_like_insight, merge_ai_insight
 from info2idea.models import Article
 from info2idea.scoring import score_article
 
@@ -42,3 +42,10 @@ class ScoringTests(unittest.TestCase):
         self.assertIsNotNone(enhanced.ai_insight)
         self.assertGreaterEqual(enhanced.total, 0)
         self.assertIn(enhanced.recommendation, {"build_now", "validate_7_days", "watch", "archive"})
+
+    def test_ai_json_parser_accepts_plain_or_fenced_json(self) -> None:
+        plain = _loads_json_object('{"summary":"ok"}')
+        fenced = _loads_json_object('```json\n{"summary":"ok"}\n```')
+
+        self.assertEqual(plain["summary"], "ok")
+        self.assertEqual(fenced["summary"], "ok")

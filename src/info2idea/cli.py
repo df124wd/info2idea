@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from .pipeline import run_pipeline
 from .server import serve
-from .storage import connect, list_articles, list_idea_cards, list_opportunity_topics, list_source_runs, list_source_status, stats
+from .storage import (
+    connect,
+    list_articles,
+    list_idea_cards,
+    list_opportunity_topics,
+    list_source_quality,
+    list_source_runs,
+    list_source_status,
+    list_today_high_value_signals,
+    stats,
+)
 
 
 def main() -> None:
@@ -35,9 +46,16 @@ def main() -> None:
     source_parser.add_argument("--limit", type=int, default=100)
     source_parser.add_argument("--status", default=None, help="Filter by source status.")
 
+    quality_parser = subparsers.add_parser("source-quality", help="Print source quality metrics as JSON.")
+    quality_parser.add_argument("--limit", type=int, default=100)
+
     run_history_parser = subparsers.add_parser("source-runs", help="Print source run history as JSON.")
     run_history_parser.add_argument("--limit", type=int, default=100)
     run_history_parser.add_argument("--source-key", default=None)
+
+    today_parser = subparsers.add_parser("today", help="Print today's high-value signals as JSON.")
+    today_parser.add_argument("--limit", type=int, default=20)
+    today_parser.add_argument("--min-score", type=float, default=50.0)
 
     subparsers.add_parser("stats", help="Print database stats as JSON.")
 
@@ -78,8 +96,12 @@ def main() -> None:
             _print_json(list_opportunity_topics(connection, args.limit, args.status))
         elif args.command == "sources":
             _print_json(list_source_status(connection, args.limit, args.status))
+        elif args.command == "source-quality":
+            _print_json(list_source_quality(connection, args.limit))
         elif args.command == "source-runs":
             _print_json(list_source_runs(connection, args.limit, args.source_key))
+        elif args.command == "today":
+            _print_json(list_today_high_value_signals(connection, args.limit, args.min_score))
         elif args.command == "stats":
             _print_json(stats(connection))
     finally:
@@ -87,7 +109,12 @@ def main() -> None:
 
 
 def _print_json(payload: object) -> None:
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write(text.encode("utf-8", errors="replace"))
+        sys.stdout.buffer.write(b"\n")
 
 
 if __name__ == "__main__":

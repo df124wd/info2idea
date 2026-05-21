@@ -3,6 +3,9 @@ const state = {
   articles: [],
   topics: [],
   sources: [],
+  sourceQuality: [],
+  inbox: [],
+  inboxStatus: "",
   signalStatus: "",
   sourceStatus: "",
 };
@@ -14,6 +17,8 @@ const els = {
   articleList: document.querySelector("#article-list"),
   topicList: document.querySelector("#topic-list"),
   sourceList: document.querySelector("#source-list"),
+  qualityList: document.querySelector("#quality-list"),
+  inboxList: document.querySelector("#inbox-list"),
   articleCount: document.querySelector("#article-count"),
   ideaCount: document.querySelector("#idea-count"),
   topicCount: document.querySelector("#topic-count"),
@@ -22,6 +27,8 @@ const els = {
   watchCount: document.querySelector("#watch-count"),
   archiveCount: document.querySelector("#archive-count"),
   aiCount: document.querySelector("#ai-count"),
+  interestedCount: document.querySelector("#interested-count"),
+  laterCount: document.querySelector("#later-count"),
   latestFetch: document.querySelector("#latest-fetch"),
 };
 
@@ -33,22 +40,37 @@ async function api(path, options = {}) {
   return response.json();
 }
 
+async function postJson(path, payload = {}) {
+  return api(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 async function refresh() {
   const signalQuery = state.signalStatus ? `&status=${encodeURIComponent(state.signalStatus)}` : "";
   const sourceQuery = state.sourceStatus ? `&status=${encodeURIComponent(state.sourceStatus)}` : "";
-  const [stats, ideas, articles, topics, sources] = await Promise.all([
+  const inboxQuery = state.inboxStatus ? `&inbox_status=${encodeURIComponent(state.inboxStatus)}` : "";
+  const [stats, ideas, articles, topics, sources, sourceQuality, inbox] = await Promise.all([
     api("/api/stats"),
     api(`/api/ideas?limit=30${signalQuery}`),
     api(`/api/articles?limit=24${signalQuery}`),
     api(`/api/topics?limit=24${signalQuery}`),
     api(`/api/sources?limit=50${sourceQuery}`),
+    api("/api/source-quality?limit=12"),
+    api(`/api/inbox?limit=24&min_score=35${inboxQuery}`),
   ]);
   state.ideas = ideas;
   state.articles = articles;
   state.topics = topics;
   state.sources = sources;
+  state.sourceQuality = sourceQuality;
+  state.inbox = inbox;
   renderStats(stats);
   renderSources();
+  renderInbox();
+  renderSourceQuality();
   renderIdeas();
   renderTopics();
   renderArticles();
@@ -63,6 +85,8 @@ function renderStats(stats) {
   els.watchCount.textContent = stats.watching ?? 0;
   els.archiveCount.textContent = stats.archived ?? 0;
   els.aiCount.textContent = stats.ai_analyzed ?? 0;
+  els.interestedCount.textContent = stats.interested ?? 0;
+  els.laterCount.textContent = stats.later ?? 0;
   els.latestFetch.textContent = formatDate(stats.latest_fetch);
 }
 
@@ -90,6 +114,80 @@ function renderSources() {
         <span>${Number(source.total_runs || 0)} runs</span>
       </div>
       ${source.last_error ? `<p>${escapeHtml(source.last_error)}</p>` : ""}
+    </article>
+  `).join("");
+}
+
+function renderInbox() {
+  if (!state.inbox.length) {
+    els.inboxList.innerHTML = `<p class="empty">No inbox signals match this view.</p>`;
+    return;
+  }
+  els.inboxList.innerHTML = state.inbox.map((article) => `
+    <article class="inbox-card" data-article-id="${Number(article.id)}">
+      <header>
+        <div>
+          <span class="domain">${escapeHtml(article.domain || "Unscored")}</span>
+          <span class="status ${statusClass(article.inbox_status)}">${escapeHtml(article.inbox_status || "new")}</span>
+          <span class="status ${statusClass(article.recommendation)}">${escapeHtml(article.recommendation || "archive")}</span>
+        </div>
+        <div class="score">${Number(article.score || 0).toFixed(1)}</div>
+      </header>
+      <div>
+        <h3><a href="${escapeAttr(article.url)}" target="_blank" rel="noreferrer">${escapeHtml(article.title)}</a></h3>
+        <div class="meta">
+          <span>${escapeHtml(article.source)}</span>
+          <span>${escapeHtml(article.analysis_mode || "rules")}</span>
+          <span>${formatDate(article.fetched_at)}</span>
+          ${article.feedback_updated_at ? `<span>${formatDate(article.feedback_updated_at)}</span>` : ""}
+        </div>
+      </div>
+      <p>${escapeHtml(truncate(article.summary || "", 260))}</p>
+      ${article.feedback_note ? `<p><strong>Note:</strong> ${escapeHtml(article.feedback_note)}</p>` : ""}
+      ${article.ai_opportunity || article.ai_summary ? renderAiBox(article) : ""}
+      ${renderDimensions(article.dimension_scores)}
+      <div class="inbox-actions">
+        <button data-action="interested" type="button">Interested</button>
+        <button class="secondary-action" data-action="later" type="button">Later</button>
+        <button class="danger-action" data-action="ignored" type="button">Ignore</button>
+        <button class="secondary-action" data-deep-dive="true" type="button">${article.analysis_mode === "ai" ? "Re-run DeepSeek" : "DeepSeek Dive"}</button>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderAiBox(article) {
+  return `
+    <div class="ai-box">
+      <h4>DeepSeek analysis</h4>
+      ${article.ai_summary ? `<p>${escapeHtml(article.ai_summary)}</p>` : ""}
+      ${article.ai_opportunity ? `<p><strong>Opportunity:</strong> ${escapeHtml(article.ai_opportunity)}</p>` : ""}
+      ${article.ai_target_user ? `<p><strong>User:</strong> ${escapeHtml(article.ai_target_user)}</p>` : ""}
+      ${article.ai_monetization ? `<p><strong>Money:</strong> ${escapeHtml(article.ai_monetization)}</p>` : ""}
+      ${article.ai_error ? `<p><strong>Error:</strong> ${escapeHtml(article.ai_error)}</p>` : ""}
+    </div>
+  `;
+}
+
+function renderSourceQuality() {
+  if (!state.sourceQuality.length) {
+    els.qualityList.innerHTML = `<p class="empty">No source quality data yet.</p>`;
+    return;
+  }
+  els.qualityList.innerHTML = state.sourceQuality.map((source) => `
+    <article class="compact-row quality-row">
+      <div>
+        <h3>${escapeHtml(source.name)}</h3>
+        <div class="meta">
+          <span class="status ${statusClass(source.status)}">${escapeHtml(source.status)}</span>
+          <span>${escapeHtml(source.kind)}</span>
+          <span>${escapeHtml(source.category)}</span>
+          <span>${percent(source.error_rate)} errors</span>
+          <span>${percent(source.empty_rate)} empty</span>
+          <span>${percent(source.new_ratio)} yield</span>
+        </div>
+      </div>
+      <strong>${Number(source.quality_score || 0).toFixed(0)}</strong>
     </article>
   `).join("");
 }
@@ -246,6 +344,16 @@ function escapeAttr(value) {
   return escapeHtml(value).replaceAll("`", "&#096;");
 }
 
+function percent(value) {
+  return `${Math.round(Number(value || 0) * 100)}%`;
+}
+
+function truncate(value, limit) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit - 3).trim()}...`;
+}
+
 function statusClass(value) {
   const normalized = String(value || "").replaceAll("_", "-");
   return `status-${normalized || "unknown"}`;
@@ -265,6 +373,38 @@ document.querySelectorAll("[data-source-status]").forEach((button) => {
     setActive("[data-source-status]", button);
     await refresh();
   });
+});
+
+document.querySelectorAll("[data-inbox-status]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    state.inboxStatus = button.dataset.inboxStatus || "";
+    setActive("[data-inbox-status]", button);
+    await refresh();
+  });
+});
+
+els.inboxList.addEventListener("click", async (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  const card = button.closest("[data-article-id]");
+  if (!card) return;
+  const articleId = Number(card.dataset.articleId);
+  button.disabled = true;
+  const originalText = button.textContent;
+  try {
+    if (button.dataset.action) {
+      button.textContent = "Saving...";
+      await postJson(`/api/signals/${articleId}/feedback`, { action: button.dataset.action });
+    } else if (button.dataset.deepDive) {
+      button.textContent = "Analyzing...";
+      await postJson(`/api/signals/${articleId}/deep-dive`);
+    }
+    await refresh();
+  } catch (error) {
+    els.runStatus.textContent = error.message;
+    button.textContent = originalText;
+    button.disabled = false;
+  }
 });
 
 function setActive(selector, activeButton) {

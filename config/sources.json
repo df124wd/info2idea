@@ -4,6 +4,7 @@
     "kind": "rss",
     "url": "https://news.ycombinator.com/rss",
     "category": "indie_dev",
+    "limit": 30,
     "weight": 1.0
   },
   {
@@ -49,6 +50,7 @@
     "kind": "rss",
     "url": "https://www.producthunt.com/feed",
     "category": "ai_tools",
+    "limit": 30,
     "weight": 1.1
   },
   {
@@ -56,6 +58,7 @@
     "kind": "rss",
     "url": "https://openai.com/news/rss.xml",
     "category": "ai_tools",
+    "limit": 30,
     "weight": 1.15
   },
   {
@@ -63,19 +66,21 @@
     "kind": "rss",
     "url": "https://deepmind.google/discover/blog/rss.xml",
     "category": "ai_tools",
+    "limit": 20,
     "weight": 1.05
   },
   {
     "name": "Gamasutra / Game Developer",
     "kind": "rss",
-    "url": "https://www.gamedeveloper.com/rss.xml",
+    "url": "https://feeds.feedburner.com/GamasutraNews",
     "category": "games",
+    "limit": 20,
     "weight": 0.95
   },
   {
     "name": "GitHub AI Tools",
     "kind": "github_search",
-    "query": "topic:ai-tool OR topic:llm stars:>50 pushed:>2026-01-01",
+    "query": "topic:llm stars:>50 pushed:>2026-01-01",
     "category": "ai_tools",
     "limit": 20,
     "weight": 1.15,
@@ -87,7 +92,7 @@
   {
     "name": "GitHub Indie Dev Utilities",
     "kind": "github_search",
-    "query": "topic:productivity OR topic:automation stars:>50 pushed:>2026-01-01",
+    "query": "topic:automation stars:>50 pushed:>2026-01-01",
     "category": "indie_dev",
     "limit": 20,
     "weight": 1.05,
@@ -99,7 +104,7 @@
   {
     "name": "GitHub AI Pain Issues",
     "kind": "github_issues",
-    "query": "(ai OR llm OR agent) (bug OR feature OR request OR workflow) comments:>5 updated:>2026-01-01",
+    "query": "llm agent automation pain workflow type:issue comments:>3 updated:>2026-01-01",
     "category": "ai_tools",
     "limit": 20,
     "weight": 1.05,
@@ -111,7 +116,7 @@
   {
     "name": "GitHub Game Dev Pain Issues",
     "kind": "github_issues",
-    "query": "(unity OR unreal OR godot) (plugin OR editor OR asset OR workflow) comments:>3 updated:>2026-01-01",
+    "query": "unity unreal godot plugin editor workflow type:issue comments:>3 updated:>2026-01-01",
     "category": "games",
     "limit": 20,
     "weight": 1.0,

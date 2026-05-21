@@ -39,7 +39,8 @@ def fetch_source(source: FeedSource, timeout: int = 20) -> list[Article]:
     if source.kind == "reddit_search":
         return _fetch_reddit_search(source, timeout)
     payload = _read_source_payload(source.url, timeout)
-    return _stamp_source(parse_feed(payload, source), source)
+    articles = _stamp_source(parse_feed(payload, source), source)
+    return articles[: max(1, source.limit)]
 
 
 def parse_feed(payload: bytes | str, source: FeedSource) -> list[Article]:
@@ -150,7 +151,8 @@ def _fetch_reddit_rss(source: FeedSource, timeout: int) -> list[Article]:
     if not url:
         return []
     payload = _read_source_payload(url, timeout)
-    return _stamp_source(parse_feed(payload, source), source)
+    articles = _stamp_source(parse_feed(payload, source), source)
+    return articles[: max(1, source.limit)]
 
 
 def _fetch_reddit_search(source: FeedSource, timeout: int) -> list[Article]:

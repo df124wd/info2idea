@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .models import Article, IdeaCard, OpportunityScore, SourceRunSummary
@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS articles (
     ai_risks TEXT DEFAULT '',
     ai_model TEXT DEFAULT '',
     ai_error TEXT DEFAULT '',
+    inbox_status TEXT DEFAULT 'new',
+    feedback_note TEXT DEFAULT '',
+    feedback_updated_at TEXT DEFAULT '',
+    deep_dive_at TEXT DEFAULT '',
     dimension_scores TEXT,
     risk_penalty REAL DEFAULT 0,
     recommendation TEXT DEFAULT 'archive',
@@ -117,6 +121,15 @@ CREATE TABLE IF NOT EXISTS source_status (
     last_finished_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS signal_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(article_id) REFERENCES articles(id)
+);
 """
 
 
@@ -191,6 +204,69 @@ def article_exists(connection: sqlite3.Connection, article: Article) -> bool:
         (article.fingerprint, article.url),
     ).fetchone()
     return bool(existing)
+
+
+def get_article(connection: sqlite3.Connection, article_id: int) -> dict | None:
+    row = connection.execute("SELECT * FROM articles WHERE id = ?", (article_id,)).fetchone()
+    if not row:
+        return None
+    return _row_to_dict(row)
+
+
+def update_article_ai_analysis(connection: sqlite3.Connection, article_id: int, score: OpportunityScore) -> None:
+    connection.execute(
+        """
+        UPDATE articles
+        SET score = ?,
+            domain = ?,
+            confidence = ?,
+            reasons = ?,
+            matched_keywords = ?,
+            analysis_mode = ?,
+            ai_summary = ?,
+            ai_opportunity = ?,
+            ai_target_user = ?,
+            ai_pain_point = ?,
+            ai_monetization = ?,
+            ai_content_angle = ?,
+            ai_validation_plan = ?,
+            ai_risks = ?,
+            ai_model = ?,
+            ai_error = ?,
+            dimension_scores = ?,
+            risk_penalty = ?,
+            recommendation = ?,
+            next_action = ?,
+            topic_key = ?,
+            deep_dive_at = ?
+        WHERE id = ?
+        """,
+        (
+            score.total,
+            score.domain,
+            score.confidence,
+            "\n".join(score.reasons),
+            ", ".join(score.matched_keywords),
+            score.analysis_mode,
+            score.ai_insight.summary if score.ai_insight else "",
+            score.ai_insight.opportunity if score.ai_insight else "",
+            score.ai_insight.target_user if score.ai_insight else "",
+            score.ai_insight.pain_point if score.ai_insight else "",
+            score.ai_insight.monetization if score.ai_insight else "",
+            score.ai_insight.content_angle if score.ai_insight else "",
+            "\n".join(score.ai_insight.validation_plan) if score.ai_insight else "",
+            "\n".join(score.ai_insight.risks) if score.ai_insight else "",
+            score.ai_insight.model if score.ai_insight else "",
+            score.ai_error,
+            _json_dumps(score.dimension_scores),
+            score.risk_penalty,
+            score.recommendation,
+            score.next_action,
+            score.topic_key,
+            _to_iso(datetime.now(timezone.utc)) or "",
+            article_id,
+        ),
+    )
 
 
 def upsert_idea_card(connection: sqlite3.Connection, card: IdeaCard) -> bool:
@@ -453,6 +529,88 @@ def list_articles(connection: sqlite3.Connection, limit: int = 100, status: str 
     return [_row_to_dict(row) for row in rows]
 
 
+def list_inbox_signals(
+    connection: sqlite3.Connection,
+    limit: int = 50,
+    inbox_status: str | None = None,
+    domain: str | None = None,
+    minimum_score: float | None = None,
+) -> list[dict]:
+    clauses = ["fetched_at >= ?"]
+    params: list[object] = [_to_iso(datetime.now(timezone.utc) - timedelta(days=1)) or ""]
+    if inbox_status:
+        clauses.append("inbox_status = ?")
+        params.append(inbox_status)
+    if domain:
+        clauses.append("domain = ?")
+        params.append(domain)
+    if minimum_score is not None:
+        clauses.append("COALESCE(score, 0) >= ?")
+        params.append(minimum_score)
+    params.append(limit)
+    where = " AND ".join(clauses)
+    rows = connection.execute(
+        f"""
+        SELECT *
+        FROM articles
+        WHERE {where}
+        ORDER BY
+            CASE inbox_status
+                WHEN 'interested' THEN 0
+                WHEN 'new' THEN 1
+                WHEN 'later' THEN 2
+                ELSE 3
+            END,
+            COALESCE(score, 0) DESC,
+            fetched_at DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
+def update_signal_feedback(connection: sqlite3.Connection, article_id: int, action: str, note: str = "") -> dict | None:
+    allowed = {"new", "interested", "ignored", "later"}
+    if action not in allowed:
+        raise ValueError(f"Unsupported inbox action: {action}")
+    now = _to_iso(datetime.now(timezone.utc)) or ""
+    connection.execute(
+        """
+        UPDATE articles
+        SET inbox_status = ?,
+            feedback_note = ?,
+            feedback_updated_at = ?
+        WHERE id = ?
+        """,
+        (action, note, now, article_id),
+    )
+    if connection.total_changes == 0:
+        return None
+    connection.execute(
+        """
+        INSERT INTO signal_feedback (article_id, action, note, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (article_id, action, note, now),
+    )
+    return get_article(connection, article_id)
+
+
+def list_signal_feedback(connection: sqlite3.Connection, article_id: int, limit: int = 20) -> list[dict]:
+    rows = connection.execute(
+        """
+        SELECT *
+        FROM signal_feedback
+        WHERE article_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (article_id, limit),
+    ).fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
 def list_source_status(connection: sqlite3.Connection, limit: int = 100, status: str | None = None) -> list[dict]:
     where = ""
     params: list[object] = []
@@ -501,6 +659,59 @@ def list_source_runs(connection: sqlite3.Connection, limit: int = 100, source_ke
     return [_row_to_dict(row) for row in rows]
 
 
+def list_source_quality(connection: sqlite3.Connection, limit: int = 100) -> list[dict]:
+    rows = connection.execute(
+        """
+        SELECT
+            status.source_key,
+            status.name,
+            status.kind,
+            status.category,
+            status.status,
+            status.total_runs,
+            status.total_fetched,
+            status.total_new,
+            status.total_topics,
+            status.last_error,
+            SUM(CASE WHEN runs.status = 'error' THEN 1 ELSE 0 END) AS error_runs,
+            SUM(CASE WHEN runs.status = 'empty' THEN 1 ELSE 0 END) AS empty_runs,
+            AVG(runs.duration_ms) AS average_duration_ms,
+            MAX(runs.finished_at) AS last_finished_at
+        FROM source_status AS status
+        LEFT JOIN source_runs AS runs ON runs.source_key = status.source_key
+        GROUP BY status.source_key
+        ORDER BY
+            CASE status.status
+                WHEN 'error' THEN 0
+                WHEN 'empty' THEN 1
+                WHEN 'ok' THEN 2
+                ELSE 3
+            END,
+            total_new DESC,
+            last_finished_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [_source_quality_row(row) for row in rows]
+
+
+def list_today_high_value_signals(connection: sqlite3.Connection, limit: int = 20, minimum_score: float = 50.0) -> list[dict]:
+    since = _to_iso(datetime.now(timezone.utc) - timedelta(days=1)) or ""
+    rows = connection.execute(
+        """
+        SELECT *
+        FROM articles
+        WHERE fetched_at >= ?
+          AND COALESCE(score, 0) >= ?
+        ORDER BY COALESCE(score, 0) DESC, fetched_at DESC
+        LIMIT ?
+        """,
+        (since, minimum_score, limit),
+    ).fetchall()
+    return [_row_to_dict(row) for row in rows]
+
+
 def list_opportunity_topics(connection: sqlite3.Connection, limit: int = 50, status: str | None = None) -> list[dict]:
     where = ""
     params: list[object] = []
@@ -539,6 +750,8 @@ def stats(connection: sqlite3.Connection) -> dict[str, int | str]:
     source_count = connection.execute("SELECT COUNT(*) AS count FROM source_status").fetchone()["count"]
     healthy_source_count = connection.execute("SELECT COUNT(*) AS count FROM source_status WHERE status = 'ok'").fetchone()["count"]
     ai_article_count = connection.execute("SELECT COUNT(*) AS count FROM articles WHERE analysis_mode = 'ai'").fetchone()["count"]
+    interested_count = connection.execute("SELECT COUNT(*) AS count FROM articles WHERE inbox_status = 'interested'").fetchone()["count"]
+    later_count = connection.execute("SELECT COUNT(*) AS count FROM articles WHERE inbox_status = 'later'").fetchone()["count"]
     latest = connection.execute("SELECT MAX(fetched_at) AS latest FROM articles").fetchone()["latest"]
     return {
         "articles": article_count,
@@ -549,12 +762,45 @@ def stats(connection: sqlite3.Connection) -> dict[str, int | str]:
         "sources": source_count,
         "healthy_sources": healthy_source_count,
         "ai_analyzed": ai_article_count,
+        "interested": interested_count,
+        "later": later_count,
         "latest_fetch": latest or "",
     }
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
     return {key: row[key] for key in row.keys()}
+
+
+def _source_quality_row(row: sqlite3.Row) -> dict:
+    total_runs = int(row["total_runs"] or 0)
+    total_fetched = int(row["total_fetched"] or 0)
+    total_new = int(row["total_new"] or 0)
+    total_topics = int(row["total_topics"] or 0)
+    error_runs = int(row["error_runs"] or 0)
+    empty_runs = int(row["empty_runs"] or 0)
+    error_rate = error_runs / total_runs if total_runs else 0.0
+    empty_rate = empty_runs / total_runs if total_runs else 0.0
+    new_ratio = total_new / total_fetched if total_fetched else 0.0
+    topic_ratio = total_topics / total_new if total_new else 0.0
+    quality_score = 100.0
+    quality_score -= error_rate * 45.0
+    quality_score -= empty_rate * 20.0
+    quality_score += min(25.0, new_ratio * 25.0)
+    quality_score += min(20.0, topic_ratio * 20.0)
+    quality_score = round(max(0.0, min(100.0, quality_score)), 1)
+    output = _row_to_dict(row)
+    output.update(
+        {
+            "error_rate": round(error_rate, 3),
+            "empty_rate": round(empty_rate, 3),
+            "new_ratio": round(new_ratio, 3),
+            "topic_ratio": round(topic_ratio, 3),
+            "quality_score": quality_score,
+            "average_duration_ms": round(float(row["average_duration_ms"] or 0.0), 1),
+        }
+    )
+    return output
 
 
 def _to_iso(value: datetime | None) -> str | None:
@@ -589,6 +835,10 @@ def _migrate(connection: sqlite3.Connection) -> None:
             "ai_risks": "TEXT DEFAULT ''",
             "ai_model": "TEXT DEFAULT ''",
             "ai_error": "TEXT DEFAULT ''",
+            "inbox_status": "TEXT DEFAULT 'new'",
+            "feedback_note": "TEXT DEFAULT ''",
+            "feedback_updated_at": "TEXT DEFAULT ''",
+            "deep_dive_at": "TEXT DEFAULT ''",
         },
     )
     idea_columns = _columns(connection, "idea_cards")

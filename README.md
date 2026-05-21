@@ -22,6 +22,7 @@ The current MVP follows this pipeline:
 6. Store weak signals as reusable topics so they can return later with more evidence.
 7. Generate an idea card when a signal is strong enough.
 8. Show source health, ideas, topics, recent signals, filters, and score dimensions in a local dashboard.
+9. Review today's signal inbox, give feedback, and trigger a DeepSeek deep dive on selected signals.
 
 Each idea card includes:
 
@@ -63,6 +64,13 @@ To inspect long-term topics:
 
 ```powershell
 python -m info2idea.cli topics --limit 20
+```
+
+To inspect the source-quality and today views used by the dashboard:
+
+```powershell
+python -m info2idea.cli source-quality --limit 50
+python -m info2idea.cli today --limit 20 --min-score 50
 ```
 
 ## Configuration
@@ -127,7 +135,7 @@ This is important because the product is meant to watch markets over time. A qui
 
 The scoring model works without AI. By default it uses deterministic rules so the project stays free and reliable.
 
-If `OPENAI_API_KEY` is set, the pipeline only sends stronger new signals to AI for deeper analysis. AI can add:
+If `DEEPSEEK_API_KEY` is set, the pipeline only sends stronger new signals to AI for deeper analysis. The API call uses the OpenAI-compatible chat completions format, with DeepSeek as the default provider. AI can add:
 
 - one-sentence signal summary
 - sharper target user and pain point
@@ -140,12 +148,41 @@ If `OPENAI_API_KEY` is set, the pipeline only sends stronger new signals to AI f
 PowerShell example:
 
 ```powershell
-$env:OPENAI_API_KEY = "your-key"
-$env:INFO2IDEA_AI_MODEL = "gpt-4o-mini"
+$env:DEEPSEEK_API_KEY = "your-key"
+$env:INFO2IDEA_AI_MODEL = "deepseek-v4-flash"
 python -m info2idea.cli run
 ```
 
 Without a key, `analysis_mode` stays `rules`. With a successful AI pass, it becomes `ai`.
+
+Useful switches:
+
+```powershell
+$env:INFO2IDEA_AI_ENABLED = "off"
+$env:INFO2IDEA_AI_BASE_URL = "https://api.deepseek.com"
+$env:INFO2IDEA_AI_MAX_TOKENS = "1600"
+```
+
+Use `INFO2IDEA_AI_ENABLED=off` when you only want to test source health without spending tokens.
+
+## Signal Inbox
+
+The dashboard includes a daily signal inbox. Each signal can be marked as:
+
+- `interested`: worth tracking or deepening
+- `later`: not urgent, but keep it visible
+- `ignored`: noise or not relevant
+- `new`: unreviewed
+
+The inbox also has a `DeepSeek Dive` button. With `DEEPSEEK_API_KEY`, it asks DeepSeek for a sharper analysis and writes the result back to the signal. Without a key, it falls back to a local rules-based analysis so the workflow still works offline.
+
+Backend APIs:
+
+```text
+GET  /api/inbox
+POST /api/signals/{id}/feedback
+POST /api/signals/{id}/deep-dive
+```
 
 ## Testing
 
